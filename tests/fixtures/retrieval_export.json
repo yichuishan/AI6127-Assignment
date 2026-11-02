@@ -1,0 +1,9 @@
+{
+  "query": "What do players say about story and performance?",
+  "mode": "Hybrid + Rerank",
+  "results": [
+    {"chunk_id": "review_001", "text": "The story is excellent but performance is unstable.", "score": 0.85, "metadata": {"game_name": "Example Game", "source_url": "https://example.com/review/001"}},
+    {"chunk_id": "review_002", "text": "It runs smoothly on my PC.", "rrf_score": 0.03, "metadata": null}
+  ],
+  "fixture_note": "Synthetic interface fixture, not real Steam evidence or labeled evaluation data."
+}
