@@ -152,3 +152,9 @@ Alibaba Cloud Qwen3 judges now use `enable_thinking` instead of DeepSeek's
 settings (default auto / 300 s / 4096). Judge failures keep successful generation
 outputs and metrics as `judge_failed`, with missing judge scores left unavailable.
 See EXPERIMENTS.md §11 for Qwen3.8 Max configuration and limitations.
+
+For saved web result ZIPs, `python rejudge_results.py generation-experiment.zip`
+reruns only failed final judgments and prompts privately for the evaluator key.
+It preserves existing summaries and does not invoke generation. Use --all-judges
+for a consistent new final judging protocol. Detailed schema diagnostics and
+representation normalizations are audited; see EXPERIMENTS.md §12.

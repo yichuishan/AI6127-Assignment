@@ -63,6 +63,8 @@ def safe_error(error):
         result['http_status'] = error.http_status
     if error.stage in ('generate', 'verify', 'revise', 'reverify', 'judge'):
         result['error_stage'] = error.stage
+    if error.code == 'invalid_judge' and hasattr(error,'validation_issues'):
+        result['validation_issues'] = error.validation_issues
     return result
 
 

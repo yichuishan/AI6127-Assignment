@@ -114,6 +114,7 @@ class Job:
                         'status': row['status'], 'error_type': row.get('error_type'),
                         'error_message': row.get('error_message'), 'error_code': row.get('error_code'),
                         'http_status': row.get('http_status'), 'error_stage': row.get('error_stage'),
+                        'validation_issues':row.get('validation_issues',[]),
                         'summary': row.get('result', {}).get('summary', '')[:1800]})
                     self.state['events'] = self.state['events'][-30:]
                     if len(self.state['events']) >= 3 and all(e['status'] in ('failed','judge_failed') for e in self.state['events'][-3:]):

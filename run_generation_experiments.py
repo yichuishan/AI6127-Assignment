@@ -296,6 +296,7 @@ def run(args, client=None, judge_client=None, *, progress=None, stop_requested=N
             row['judge_status']='failed' if phase=='judge' else row['judge_status']
             if row['generation_status']=='pending':row['generation_status']='failed'
             row.update(safe_error(error))
+            if hasattr(error,'judge_attempt'):row['judge_attempt']=error.judge_attempt
         with checkpoint.open('a',encoding='utf-8') as f:
             f.write(json.dumps(row,ensure_ascii=False)+'\n');f.flush();os.fsync(f.fileno())
         rows.append(row)

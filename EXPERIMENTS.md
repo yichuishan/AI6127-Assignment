@@ -252,3 +252,44 @@ status=judge_failed；CSV 和网页单列评测失败。生成延迟、token、�
 
 官方参考：[深度思考](https://help.aliyun.com/zh/model-studio/deep-thinking)、
 [OpenAI 兼容接口](https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope)。
+
+## 12. Judge 格式诊断与仅补跑已有总结的评测
+
+`invalid_judge` 表示请求有返回，但正文不满足评分 schema；不能等同于超时，也不意味着生成失败。
+旧版不保留失败评分的完整返回，无法从旧 ZIP 反推出究竟缺哪个字段。
+新版 Prompt 明确给出输出模板、每个数组的确切长度、逐条 citation_pairs（每个 claim–source 对一项）。
+例如 4 个 claims 含 6 个引用对时，claim_support 必须长 4，citation_support 必须长 6。
+
+只允许无歧义的表示转换（整值浮点/1–5 数字字符串转分数，true/false 字符串或 0/1 转布尔），
+每次转换记录在 judge.normalizations。缺失、错误长度、嵌套数组、含糊对象不会自动补分或截断。
+错误的 validation_issues 记录字段、期望数量、实际数量/类型；失败评分的 token usage 和返回 SHA256
+保存在 judge_attempt 中，不保存原始返回正文或密钥。不自动重试付费请求。
+
+如果已有网页下载的 ZIP，不必重跑生成器。把 ZIP 放在仓库目录，运行：
+
+```bash
+python rejudge_results.py generation-experiment.zip
+```
+
+程序从 ZIP 的 manifest 读取评测模型和 API 地址，提示你输入评测服务的 API Key（不回显）。
+也支持 `JUDGE_API_KEY` 或 `--api-key-file`，不要将密钥放入聊天或仓库。
+默认仅对 judge_failed / error_stage=judge 且已有总结的记录调用一次评测模型；
+成功记录原样保留，不调用生成器，不覆盖原 ZIP。输出到 `generation-experiment.rejudged/`。
+默认关闭官方 DeepSeek/Qwen3 思考（auto），评测超时 300 秒，输出预算 4096 tokens。
+
+```bash
+python rejudge_results.py generation-experiment.zip \
+  --output rejudged_run_2 --thinking disabled --timeout 300 --max-tokens 4096
+```
+
+可使用 --model / --base-url 覆盖模型与接口；若原成功评分来自另一模型，混合结果不能视为同一 judge 的实验。
+最终报告建议使用同一评测协议对本批全部已有总结重新评分（仍不重新生成）：
+
+```bash
+python rejudge_results.py generation-experiment.zip --all-judges --output consistent_judge_run
+```
+
+旧成功评分默认保留旧协议，新评分标记 explicit_lengths_v2；rejudge_manifest.json 和 rejudge_history
+保留来源和改动记录。只补失败评分时不应隐瞒混合协议。成本指标为保留的最终评分估算，
+不包括无法从旧记录恢复的失败请求费用或全部历史重评费用，实际账单以供应商为准。
+输出目录必须是新的；中断前已完成的记录写入 checkpoint.jsonl，但当前命令不会原地自动续跑。

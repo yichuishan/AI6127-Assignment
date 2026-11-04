@@ -44,6 +44,7 @@ function render(job) {
       const status=document.createElement('span'); status.textContent=event.status==='judge_failed'?'生成成功 · 评测失败':event.status==='failed'?`失败 · ${event.error_type}`:'✓ 已完成';
       head.append(b,id,status); article.append(head);
       if(event.error_message){const p=document.createElement('p');p.textContent=`${event.error_stage?event.error_stage+' · ':''}${event.error_code||''}${event.http_status?' · HTTP '+event.http_status:''}：${event.error_message}`;article.append(p);}
+      if(event.validation_issues?.length){const p=document.createElement('p');p.textContent=event.validation_issues.map(x=>`${x.field}: ${x.problem}${x.expected_length!==undefined?` (应 ${x.expected_length}, 实际 ${x.actual_length??x.actual_type})`:''}`).join('；');article.append(p);}
       if(event.summary){const p=document.createElement('p');p.textContent=event.summary;article.append(p);}
       $('events').append(article);
     });
