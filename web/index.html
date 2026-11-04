@@ -14,9 +14,14 @@
 <fieldset id="config-fields">
 <label>API 地址 <span>OpenAI 兼容接口</span><input id="base-url" type="url" value="https://api.openai.com/v1" placeholder="https://your-provider.com/v1" required></label>
 <p class="hint">支持填写基础地址或完整的 /chat/completions 地址。</p>
+<div class="presets"><button type="button" id="deepseek-preset">使用 DeepSeek V4 Pro 配置</button></div>
 <div class="two"><label>模型名称<input id="model" value="gpt-4o-mini" required maxlength="200"></label><label>API Key<input id="api-key" type="password" autocomplete="off" placeholder="输入你的密钥" required></label></div>
 <p class="privacy">⌑ 密钥仅用于本次服务端请求，不写入结果文件或浏览器存储。</p>
 <details><summary>最终评估模型 <span>可选</span></summary><label>评估模型名称<input id="judge-model" placeholder="留空则只运行生成和性能测量"></label><div class="two"><label>评估 API 地址<input id="judge-base-url" type="url" placeholder="留空沿用生成 API"></label><label>评估 API Key<input id="judge-api-key" type="password" autocomplete="off" placeholder="留空沿用生成密钥"></label></div><p class="hint">建议使用不同模型进行独立评分。启用后会增加 API 调用及费用。</p></details>
+<details><summary>请求兼容设置 <span>DeepSeek / 输出预算</span></summary>
+<label>思考模式<select id="thinking"><option value="auto">自动：DeepSeek V4 / Flash 关闭思考</option><option value="disabled">显式关闭思考（需 API 支持）</option><option value="enabled">显式开启思考（需 API 支持）</option></select></label>
+<div class="two"><label>最大输出 tokens<input id="max-output-tokens" type="number" min="256" max="131072" value="8192"></label><label>请求超时（秒）<input id="timeout" type="number" min="10" max="600" value="180"></label></div>
+<p class="hint">DeepSeek V4 默认开启思考。建议先关闭思考完成基础实验；开启时可能需要更大输出预算和更长超时，费用也会变化。</p></details>
 <div class="divider"></div>
 <div class="label-row"><h3>实验方法</h3><span>B / C / D 共用同一份草稿</span></div>
 <div class="arms">

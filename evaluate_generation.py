@@ -16,7 +16,11 @@ def judge_result(query, result, hits, client, model, key_points=None, *, context
         payload = json.loads(messages[1]['content'])
         payload['claims'] = result['claims']
         messages[1]['content'] = json.dumps(payload)
-    response = client.complete(messages, model=model, temperature=0)
+    try:
+        response = client.complete(messages, model=model, temperature=0)
+    except GenerationError as error:
+        error.stage = 'judge'
+        raise
     try:
         scores = json.loads(response['content'])
         for key in ('faithfulness', 'relevance'):
@@ -36,7 +40,7 @@ def judge_result(query, result, hits, client, model, key_points=None, *, context
                 if not isinstance(scores.get(key), list) or len(scores[key]) != count or any(type(x) is not bool for x in scores[key]):
                     raise ValueError()
     except (ValueError, KeyError, TypeError):
-        raise GenerationError('Invalid judge output') from None
+        raise GenerationError('Invalid judge output', code='invalid_judge', stage='judge') from None
     scores = {k: scores[k] for k in ('faithfulness', 'relevance') + (('coverage',) if key_points else ()) + (('claim_support', 'citation_support', 'context_relevance') if detailed else ())}
     return {'scores': scores, 'model': model, 'usage': response.get('usage', {})}
 

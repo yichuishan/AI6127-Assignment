@@ -13,7 +13,7 @@ import time
 from urllib.parse import urlparse
 import zipfile
 
-from rag_generator import APPROACHES, OpenAICompatibleClient
+from rag_generator import APPROACHES, OpenAICompatibleClient, safe_error
 from run_generation_experiments import jsonl, parser, run
 
 ROOT = Path(__file__).resolve().parent
@@ -55,9 +55,9 @@ def integer(value, minimum, maximum):
 
 
 class LiveClient:
-    def __init__(self, job, key, base_url, factory):
+    def __init__(self, job, key, base_url, factory, *, max_tokens=8192, thinking='auto', timeout=180):
         self.job = job
-        self.transport = factory(base_url=base_url, api_key=key, timeout=60)
+        self.transport = factory(base_url=base_url, api_key=key, timeout=timeout,max_tokens=max_tokens,thinking=thinking)
 
     def complete(self, messages, model, temperature):
         job = self.job
@@ -88,8 +88,9 @@ class Job:
         try:
             key = data.pop('api_key')
             judge_key = data.pop('judge_api_key', '') or key
-            client = LiveClient(self, key, data['base_url'], factory)
-            judge = LiveClient(self, judge_key, data.get('judge_base_url') or data['base_url'], factory)
+            options = dict(max_tokens=data['max_output_tokens'],thinking=data['thinking'],timeout=data['timeout'])
+            client = LiveClient(self, key, data['base_url'], factory,**options)
+            judge = LiveClient(self, judge_key, data.get('judge_base_url') or data['base_url'], factory,**options)
             # Credentials stay only in the two transport objects, never in config/files/logs.
             key = judge_key = None
             dataset = self.directory / 'input.jsonl'
@@ -97,7 +98,7 @@ class Job:
             dataset.write_text(''.join(json.dumps(c, ensure_ascii=False)+'\n' for c in cases), encoding='utf-8')
             args = parser().parse_args(['run', str(dataset), '--output', str(self.directory/'results')])
             for name in ('model', 'base_url', 'judge_model', 'judge_base_url', 'approaches',
-                         'repeats', 'max_claims', 'reference_metrics', 'input_price', 'output_price',
+                         'repeats', 'max_claims', 'max_output_tokens', 'thinking', 'timeout', 'reference_metrics', 'input_price', 'output_price',
                          'judge_input_price', 'judge_output_price'):
                 if name in data:
                     setattr(args, name, data[name])
@@ -109,6 +110,8 @@ class Job:
                     self.state['failed'] += row['status'] == 'failed'
                     self.state['events'].append({'case_id': row['case_id'], 'approach': row['approach'],
                         'status': row['status'], 'error_type': row.get('error_type'),
+                        'error_message': row.get('error_message'), 'error_code': row.get('error_code'),
+                        'http_status': row.get('http_status'), 'error_stage': row.get('error_stage'),
                         'summary': row.get('result', {}).get('summary', '')[:1800]})
                     self.state['events'] = self.state['events'][-30:]
                     if len(self.state['events']) >= 3 and all(e['status'] == 'failed' for e in self.state['events'][-3:]):
@@ -119,7 +122,7 @@ class Job:
                 self.state.update(status='stopped' if self.stop.is_set() else 'completed', stage='已停止' if self.stop.is_set() else '实验结束')
         except Exception as error:
             with self.lock:
-                self.state.update(status='failed', stage='运行失败', error_type=type(error).__name__)
+                self.state.update(status='failed', stage='运行失败', **safe_error(error))
         finally:
             data.clear()
             with self.lock:
@@ -152,6 +155,10 @@ class Application:
                 raise ValueError('请输入有效模型名称。')
             data[name] = value.strip() or None
         data['repeats'] = integer(data.get('repeats', 1), 1, 5)
+        data['max_output_tokens'] = integer(data.get('max_output_tokens',8192),256,131072)
+        data['timeout'] = integer(data.get('timeout',180),10,600)
+        data['thinking'] = data.get('thinking','auto')
+        if data['thinking'] not in ('auto','disabled','enabled'):raise ValueError('思考模式无效。')
         data['max_claims'] = integer(data.get('max_claims', 4), 1, 12)
         limit = integer(data.get('limit', 3), 1, 1000)
         arms = data.get('approaches', list(APPROACHES))

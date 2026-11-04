@@ -12,7 +12,7 @@ import random
 import statistics
 import time
 
-from rag_generator import APPROACHES, PROMPTS, GenerationError, OpenAICompatibleClient, build_context, generate_summary
+from rag_generator import APPROACHES, PROMPTS, GenerationError, OpenAICompatibleClient, build_context, generate_summary, safe_error
 from evaluate_generation import judge_result
 
 PIN = '34e8675a6af11e6871119d2de264a2487ba9b7b5'
@@ -221,9 +221,9 @@ def run(args, client=None, judge_client=None, *, progress=None, stop_requested=N
             'judge_enabled':bool(args.judge_model),'note':'No API calls. Missing human references/key points cannot be computed from aspect labels.'})
         return []
     if args.api_key_file: os.environ['GENERATION_API_KEY']=Path(args.api_key_file).read_text().strip()
-    transport=client or OpenAICompatibleClient(base_url=args.base_url,timeout=args.timeout)
+    transport=client or OpenAICompatibleClient(base_url=args.base_url,timeout=args.timeout,max_tokens=args.max_output_tokens,thinking=args.thinking)
     judge_transport=judge_client or OpenAICompatibleClient(base_url=args.judge_base_url or args.base_url,
-        api_key=Path(args.judge_key_file).read_text().strip() if args.judge_key_file else os.getenv('JUDGE_API_KEY') or None,timeout=args.timeout)
+        api_key=Path(args.judge_key_file).read_text().strip() if args.judge_key_file else os.getenv('JUDGE_API_KEY') or None,timeout=args.timeout,max_tokens=args.max_output_tokens,thinking=args.thinking)
     rouge=None
     if 'rouge' in args.reference_metrics:
         from rouge_score.rouge_scorer import RougeScorer
@@ -285,7 +285,7 @@ def run(args, client=None, judge_client=None, *, progress=None, stop_requested=N
                 if points: m['key_point_coverage']=statistics.mean(p['covered'] for p in points)
         except Exception as error:
             # Never serialize raw API exceptions, credentials, or request headers.
-            row['status']='failed';row['error_type']=type(error).__name__
+            row['status']='failed';row.update(safe_error(error))
         with checkpoint.open('a',encoding='utf-8') as f:
             f.write(json.dumps(row,ensure_ascii=False)+'\n');f.flush();os.fsync(f.fileno())
         rows.append(row)
@@ -325,7 +325,8 @@ def parser():
     a.add_argument('--approaches',nargs='+',choices=APPROACHES,default=list(APPROACHES))
     a.add_argument('--reference-metrics',nargs='*',choices=['rouge','bertscore'],default=[])
     a.add_argument('--bertscore-model',default='roberta-large');a.add_argument('--device',default='cpu')
-    for name,default in [('repeats',1),('seed',42),('max-claims',6),('max-context-chars',24000),('max-chunk-chars',4000),('timeout',60)]:a.add_argument('--'+name,type=int,default=default)
+    for name,default in [('repeats',1),('seed',42),('max-claims',6),('max-context-chars',24000),('max-chunk-chars',4000),('timeout',180),('max-output-tokens',8192)]:a.add_argument('--'+name,type=int,default=default)
+    a.add_argument('--thinking',choices=['auto','disabled','enabled'],default='auto')
     a.add_argument('--limit',type=int);a.add_argument('--preflight',action='store_true')
     a.add_argument('--input-price',type=float);a.add_argument('--output-price',type=float)
     a.add_argument('--judge-input-price',type=float);a.add_argument('--judge-output-price',type=float)

@@ -70,7 +70,7 @@ python run_generation_experiments.py run experiments/steam_generation_eval.jsonl
 ```
 
 模型名称须替换为你的供应商支持的 ID。生成和评估端点都需要支持 JSON object mode、temperature=0、
-max_tokens；当前 transport 输出上限 1800 tokens。模型拒绝、超时、格式错误会记失败，
+max_tokens；当前 transport 默认输出上限 8192 tokens，可用 --max-output-tokens 调整。模型拒绝、超时、格式错误会记失败，
 不会返回伪造成功，也不会自动付费重试。
 
 先检查 checkpoint.jsonl 的 status、error_type 和 result/claim_audit，再决定扩大规模。
@@ -191,7 +191,7 @@ python experiment_web.py --port 8080
 点击开始才会发送模型请求；默认先跑 3 个问题。可直接填写 `/v1` 基础地址或完整 `/chat/completions` 地址。
 进度包括已完成/总任务、当前生成或核验阶段、API 请求数、耗时、失败数和最近输出。
 连续 3 项失败会自动停止，避免错误配置下继续执行全部任务。
-停止按钮会等待当前请求结束（超时 60 秒），然后导出已完成部分。关闭网页不会停止运行，使用同一浏览器回到页面可恢复显示。
+停止按钮会等待当前请求结束（默认超时 180 秒，可在网页配置），然后导出已完成部分。关闭网页不会停止运行，使用同一浏览器回到页面可恢复显示。
 浏览器会话 cookie 只用于区分任务访问；API Key 不进入 cookie、localStorage、服务日志或输出文件。
 密钥在运行进程内存中用于请求你填写的服务；请确认填写的服务域名可信。
 输出保存在 `experiments/web_runs/<任务ID>/`，网页提供 ZIP 下载。
@@ -199,3 +199,25 @@ python experiment_web.py --port 8080
 网页当前不会在服务重启后自动恢复正在执行的任务，也不会保存密钥；已落盘的结果仍可在该目录查看。
 ROUGE/BERTScore 仍需要安装可选依赖和提供人工 reference；没有这些条件时可先不勾选。
 本页面是当前环境的实验工具；若用于多人公开部署，还需配置正式登录、TLS 与运行资源管理。
+
+
+## 10. DeepSeek V4 与错误诊断
+
+官方地址：`https://api.deepseek.com`，模型示例：`deepseek-v4-pro`。
+网页可点击“使用 DeepSeek V4 Pro 配置”。默认 `thinking=auto` 会针对官方域名的
+DeepSeek V4 / Flash 显式发送 `thinking: {"type":"disabled"}`；其他供应商不会收到该字段。
+可在“请求兼容设置”显式开启思考，增加输出预算和超时。
+CLI 对应 `--thinking auto|disabled|enabled --max-output-tokens 8192 --timeout 180`。
+这些参数保存在 manifest 中；所有组沿用同一配置。DeepSeek 思考模式会忽略 temperature，
+报告中不能将开启思考的实验描述为 temperature=0 保证确定性。
+
+旧版硬编码 1800 tokens 与 60 秒，DeepSeek V4 默认开启思考，可能在正文生成前耗尽预算或超时。
+但仅凭 GenerationError 无法确认实际原因。新版会显示 HTTP 状态、错误阶段与安全错误码：
+401 认证、402 余额、429 限流、timeout 超时、output_truncated 截断、empty_content 空正文、
+invalid_json 无效 JSON、invalid_verdict 核验格式错误等。不记录供应商原始错误正文或密钥。
+不会自动重试付费请求。先用 1 个问题、不启用最终 judge 验证，再扩大实验。
+
+来源：[DeepSeek API](https://api-docs.deepseek.com/)、
+[请求参数](https://api-docs.deepseek.com/api/create-chat-completion)、
+[JSON 输出](https://api-docs.deepseek.com/guides/json_mode)。
+未使用真实密钥验证，不将模拟传输测试视为真实 DeepSeek 推理成功。

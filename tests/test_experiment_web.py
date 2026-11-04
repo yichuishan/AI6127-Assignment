@@ -78,6 +78,23 @@ class WebTests(unittest.TestCase):
         req=urllib.request.Request(self.url+'/api/jobs',json.dumps(self.config()).encode(),{'Content-Type':'application/json','Origin':'https://unrelated.example'})
         with self.assertRaises(urllib.error.HTTPError) as error:self.client.open(req)
         self.assertEqual(error.exception.code,403)
+    def test_safe_diagnostic_reaches_progress_and_checkpoint(self):
+        from rag_generator import GenerationError
+        class NoBalance(Model):
+            def complete(self,*a,**kw):
+                raise GenerationError('raw-secret-not-for-display',code='http_402',http_status=402)
+        self.app.factory=NoBalance
+        cfg=self.config();cfg['approaches']=['baseline']
+        job=self.post('/api/jobs',cfg);state=self.wait(job['id'])
+        event=state['events'][0]
+        self.assertEqual(event['http_status'],402)
+        self.assertEqual(event['error_stage'],'generate')
+        self.assertEqual(event['error_code'],'http_402')
+        self.assertIn('余额',event['error_message'])
+        self.assertNotIn('raw-secret',json.dumps(state))
+        cfg2=self.app.jobs[job['id']].directory/'results/checkpoint.jsonl'
+        self.assertEqual(json.loads(cfg2.read_text())['error_code'],'http_402')
+
     def test_three_failures_stop_remaining_tasks(self):
         class Broken(Model):
             def complete(self,*a,**kw): raise RuntimeError('do-not-serialize-this-secret')

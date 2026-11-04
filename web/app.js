@@ -42,11 +42,12 @@ function render(job) {
       const id=document.createElement('small'); id.textContent=event.case_id;
       const status=document.createElement('span'); status.textContent=event.status==='failed'?`失败 · ${event.error_type}`:'✓ 已完成';
       head.append(b,id,status); article.append(head);
+      if(event.error_message){const p=document.createElement('p');p.textContent=`${event.error_stage?event.error_stage+' · ':''}${event.error_code||''}${event.http_status?' · HTTP '+event.http_status:''}：${event.error_message}`;article.append(p);}
       if(event.summary){const p=document.createElement('p');p.textContent=event.summary;article.append(p);}
       $('events').append(article);
     });
   }
-  if(job.status==='failed')alertMessage(`任务未能完成（${job.error_type||'未知错误'}）。请检查 API 配置及依赖。可下载已生成的文件。`);
+  if(job.status==='failed')alertMessage(job.error_message||`任务未能完成（${job.error_type||'未知错误'}）。请检查配置。`);
   clearTimeout(pollTimer);
   if(running) pollTimer=setTimeout(poll,1500);
 }
@@ -57,6 +58,7 @@ async function poll() {
 }
 $('experiment-form').addEventListener('input',estimate);
 $('smoke-preset').onclick=()=>{$('limit').value=3;estimate();};
+$('deepseek-preset').onclick=()=>{$('base-url').value='https://api.deepseek.com';$('model').value='deepseek-v4-pro';$('thinking').value='auto';$('max-output-tokens').value=8192;$('timeout').value=180;estimate();};
 $('full-preset').onclick=()=>{$('limit').value=100;estimate();};
 $('experiment-form').addEventListener('submit',async event=>{
   event.preventDefault();alertMessage('');$('start').disabled=true;
@@ -68,6 +70,7 @@ $('experiment-form').addEventListener('submit',async event=>{
     const body={base_url:$('base-url').value,model:$('model').value,api_key:$('api-key').value,
       judge_model:$('judge-model').value,judge_base_url:$('judge-base-url').value,judge_api_key:$('judge-api-key').value,
       limit:number('limit'),repeats:number('repeats'),max_claims:number('max-claims'),approaches:arms,
+      max_output_tokens:number('max-output-tokens'),timeout:number('timeout'),thinking:$('thinking').value,
       reference_metrics:['rouge','bertscore'].filter(id=>$(id).checked),dataset_jsonl:file?await file.text():''};
     for(const id of ['input-price','output-price','judge-input-price','judge-output-price'])body[id.replaceAll('-','_')]=number(id);
     const job=await request('/api/jobs',body);

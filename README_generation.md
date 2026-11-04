@@ -26,7 +26,7 @@ python rag_generator.py search_results.json --approach verify_revise --output my
 python -m unittest discover -s tests -v
 ```
 
-`OPENAI_API_KEY` is a fallback. The default endpoint is `https://api.openai.com/v1/chat/completions`. A local OpenAI-compatible server can use `http://localhost:8000/v1` and its model ID without a key. Model weights/serving are not installed. Remote endpoints require HTTPS. The provider must support Chat Completions, JSON object mode, temperature 0 and max_tokens (1800). Requests use inherited proxy/TLS trust, a 60-second timeout and no automatic paid retries. Invalid API/JSON output raises `GenerationError`, not a fabricated success.
+`OPENAI_API_KEY` is a fallback. The default endpoint is `https://api.openai.com/v1/chat/completions`. A local OpenAI-compatible server can use `http://localhost:8000/v1` and its model ID without a key. Model weights/serving are not installed. Remote endpoints require HTTPS. The provider must support Chat Completions, JSON object mode, temperature 0 and max_tokens (default 8192). Requests use inherited proxy/TLS trust, a 180-second timeout and no automatic paid retries. Invalid API/JSON output raises `GenerationError`, not a fabricated success.
 
 ```python
 from rag_generator import generate_summary, load_retrieval
@@ -138,3 +138,10 @@ Web UI: `python launch_web.py` opens the experiment page on your own computer.
 For cloud port preview, run `python experiment_web.py --host 0.0.0.0 --port 8080`.
 The page keeps keys in memory, shows task/stage progress, supports stopping and
 ZIP export, and uses the existing experiment runner. See EXPERIMENTS.md §9.
+
+
+DeepSeek V4: use `https://api.deepseek.com` and `deepseek-v4-pro`. The web UI has a
+preset and configurable output budget/timeout/thinking. Auto mode disables thinking
+for official DeepSeek V4/Flash endpoints; other providers receive no thinking field.
+HTTP status, empty/truncated outputs, network and schema errors are reported with
+safe codes rather than raw provider messages. See EXPERIMENTS.md §10.
