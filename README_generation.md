@@ -123,3 +123,18 @@ The 21 offline tests cover both original interfaces and semantic workflow: all v
 `tests/fixtures/retrieval_export.json` is synthetic. `generation_results.json` contains four explicitly scripted mock examples plus an actual no-evidence result. It demonstrates control flow only; timings are local mock execution, not model latency. Regeneration uses test-only clients and never calls an API.
 
 No real API inference/verification/repair or labeled generation scoring has been performed. Credentials and reference data are required for those checks. No quality gains or evaluation scores are claimed from mocks. Quote matching and LLM verification can both miss unsupported meaning; same-model verification may share generation errors. No Retrieval or independent sentiment module is changed.
+
+## Reproducible report experiments
+
+Use `run_generation_experiments.py` for the pinned Steam benchmark, shared-draft
+ablation, resumable checkpoints, detailed independent judging, report exports,
+and human annotation agreement. See [EXPERIMENTS.md](EXPERIMENTS.md) for private
+API-key setup and commands. `experiments/steam_generation_eval.jsonl` contains
+100 real queries with saved condensed benchmark evidence; references still need
+human annotation. The prepared data and preflight files are not LLM results.
+
+
+Web UI: `python launch_web.py` opens the experiment page on your own computer.
+For cloud port preview, run `python experiment_web.py --host 0.0.0.0 --port 8080`.
+The page keeps keys in memory, shows task/stage progress, supports stopping and
+ZIP export, and uses the existing experiment runner. See EXPERIMENTS.md §9.

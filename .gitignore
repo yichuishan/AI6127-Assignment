@@ -2,3 +2,6 @@ __pycache__/
 *.py[cod]
 .venv/
 .env
+
+# Private web experiment outputs (never commit credentials or user uploads).
+experiments/web_runs/
