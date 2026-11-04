@@ -125,10 +125,18 @@ class OpenAICompatibleClient:
         payload = {'model': model, 'messages': messages, 'temperature': temperature,
                    'max_tokens': self.max_tokens, 'response_format': {'type': 'json_object'}}
         thinking = self.thinking
-        if thinking == 'auto' and urlparse(self.base_url).hostname == 'api.deepseek.com' and (model.startswith('deepseek-v4') or model == 'deepseek-flash'):
-            thinking = 'disabled'
+        host = urlparse(self.base_url).hostname or ''
+        aliyun_qwen = (host == 'aliyuncs.com' or host.endswith('.aliyuncs.com')) and model.lower().startswith('qwen')
+        if thinking == 'auto':
+            if host == 'api.deepseek.com' and (model.startswith('deepseek-v4') or model == 'deepseek-flash'):
+                thinking = 'disabled'
+            elif aliyun_qwen and model.lower().startswith('qwen3'):
+                thinking = 'disabled'
         if thinking != 'auto':
-            payload['thinking'] = {'type': thinking}
+            if aliyun_qwen:
+                payload['enable_thinking'] = thinking == 'enabled'
+            else:
+                payload['thinking'] = {'type': thinking}
         headers = {'Content-Type': 'application/json'}
         if self.api_key:
             headers['Authorization'] = 'Bearer ' + self.api_key

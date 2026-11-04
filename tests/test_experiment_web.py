@@ -105,6 +105,25 @@ class WebTests(unittest.TestCase):
         self.assertIn('stop_reason',state)
         self.assertNotIn('do-not-serialize-this-secret',json.dumps(state))
 
+    def test_generation_and_judge_options_are_independent(self):
+        instances=[]
+        class RecordingModel(Model):
+            def __init__(self,**kwargs):
+                instances.append(kwargs)
+                super().__init__(**kwargs)
+        self.app.factory=RecordingModel
+        cfg=self.config()
+        cfg.update(timeout=90,max_output_tokens=8192,thinking='disabled',judge_timeout=500,
+                   judge_max_output_tokens=2048,judge_thinking='enabled')
+        job=self.post('/api/jobs',cfg);self.wait(job['id'])
+        self.assertEqual(instances[0]['thinking'],'disabled')
+        self.assertEqual(instances[1]['thinking'],'enabled')
+        self.assertEqual(instances[0]['timeout'],90)
+        self.assertEqual(instances[1]['timeout'],500)
+        self.assertEqual(instances[1]['max_tokens'],2048)
+        manifest=self.app.jobs[job['id']].directory/'results/manifest.json'
+        self.assertEqual(json.loads(manifest.read_text())['judge_timeout'],500)
+
     def test_stop_and_report_partial_results(self):
         entered, release=threading.Event(),threading.Event()
         class Delayed(Model):

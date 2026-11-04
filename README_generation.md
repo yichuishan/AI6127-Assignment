@@ -145,3 +145,10 @@ preset and configurable output budget/timeout/thinking. Auto mode disables think
 for official DeepSeek V4/Flash endpoints; other providers receive no thinking field.
 HTTP status, empty/truncated outputs, network and schema errors are reported with
 safe codes rather than raw provider messages. See EXPERIMENTS.md §10.
+
+
+Alibaba Cloud Qwen3 judges now use `enable_thinking` instead of DeepSeek's
+`thinking` field. The web UI exposes independent judge thinking/timeout/token
+settings (default auto / 300 s / 4096). Judge failures keep successful generation
+outputs and metrics as `judge_failed`, with missing judge scores left unavailable.
+See EXPERIMENTS.md §11 for Qwen3.8 Max configuration and limitations.

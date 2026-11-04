@@ -80,7 +80,7 @@ class Job:
         self.owner, self.directory = owner, directory
         self.lock, self.stop = threading.Lock(), threading.Event()
         self.state = {'id': directory.name, 'status': 'running', 'completed': 0, 'total': 0,
-                      'failed': 0, 'api_calls': 0, 'successful_api_calls': 0,
+                      'failed': 0, 'judge_failed':0, 'api_calls': 0, 'successful_api_calls': 0,
                       'stage': '准备输入', 'events': [], 'started_at': time.time()}
         self.thread = threading.Thread(target=self.execute, args=(data, factory), daemon=True)
 
@@ -90,7 +90,8 @@ class Job:
             judge_key = data.pop('judge_api_key', '') or key
             options = dict(max_tokens=data['max_output_tokens'],thinking=data['thinking'],timeout=data['timeout'])
             client = LiveClient(self, key, data['base_url'], factory,**options)
-            judge = LiveClient(self, judge_key, data.get('judge_base_url') or data['base_url'], factory,**options)
+            judge = LiveClient(self, judge_key, data.get('judge_base_url') or data['base_url'], factory,
+                max_tokens=data['judge_max_output_tokens'],thinking=data['judge_thinking'],timeout=data['judge_timeout'])
             # Credentials stay only in the two transport objects, never in config/files/logs.
             key = judge_key = None
             dataset = self.directory / 'input.jsonl'
@@ -98,7 +99,7 @@ class Job:
             dataset.write_text(''.join(json.dumps(c, ensure_ascii=False)+'\n' for c in cases), encoding='utf-8')
             args = parser().parse_args(['run', str(dataset), '--output', str(self.directory/'results')])
             for name in ('model', 'base_url', 'judge_model', 'judge_base_url', 'approaches',
-                         'repeats', 'max_claims', 'max_output_tokens', 'thinking', 'timeout', 'reference_metrics', 'input_price', 'output_price',
+                         'repeats', 'max_claims', 'max_output_tokens', 'thinking', 'timeout', 'judge_max_output_tokens', 'judge_thinking', 'judge_timeout', 'reference_metrics', 'input_price', 'output_price',
                          'judge_input_price', 'judge_output_price'):
                 if name in data:
                     setattr(args, name, data[name])
@@ -108,14 +109,15 @@ class Job:
                 with self.lock:
                     self.state.update(completed=completed, total=total, stage='完成一项实验')
                     self.state['failed'] += row['status'] == 'failed'
+                    self.state['judge_failed'] += row['status'] == 'judge_failed'
                     self.state['events'].append({'case_id': row['case_id'], 'approach': row['approach'],
                         'status': row['status'], 'error_type': row.get('error_type'),
                         'error_message': row.get('error_message'), 'error_code': row.get('error_code'),
                         'http_status': row.get('http_status'), 'error_stage': row.get('error_stage'),
                         'summary': row.get('result', {}).get('summary', '')[:1800]})
                     self.state['events'] = self.state['events'][-30:]
-                    if len(self.state['events']) >= 3 and all(e['status'] == 'failed' for e in self.state['events'][-3:]):
-                        self.state['stop_reason'] = '连续 3 项实验失败，已自动停止；请检查 API 配置与结果文件。'
+                    if len(self.state['events']) >= 3 and all(e['status'] in ('failed','judge_failed') for e in self.state['events'][-3:]):
+                        self.state['stop_reason'] = '连续 3 项出现生成或评测错误，已自动停止；请检查 API 配置与结果文件。'
                         self.stop.set()
             run(args, client, judge, progress=progress, stop_requested=self.stop.is_set)
             with self.lock:
@@ -157,6 +159,10 @@ class Application:
         data['repeats'] = integer(data.get('repeats', 1), 1, 5)
         data['max_output_tokens'] = integer(data.get('max_output_tokens',8192),256,131072)
         data['timeout'] = integer(data.get('timeout',180),10,600)
+        data['judge_timeout'] = integer(data.get('judge_timeout',300),10,600)
+        data['judge_max_output_tokens'] = integer(data.get('judge_max_output_tokens',4096),256,131072)
+        data['judge_thinking'] = data.get('judge_thinking','auto')
+        if data['judge_thinking'] not in ('auto','disabled','enabled'):raise ValueError('评测思考模式无效。')
         data['thinking'] = data.get('thinking','auto')
         if data['thinking'] not in ('auto','disabled','enabled'):raise ValueError('思考模式无效。')
         data['max_claims'] = integer(data.get('max_claims', 4), 1, 12)

@@ -133,8 +133,8 @@ BERTScorer 在一次运行中复用，不会每条重新加载模型。
 - 生成逻辑延迟及 P50/P95、串行 records/s、输入输出 tokens、生成/评估成本分开记录。
 
 缺失值保持 null/空白，不按 0 填充；所有均值都提供有效样本数。
-汇总质量指标默认限 status=completed 的样本，失败数量单列；比较时也要分析失败偏差。
-任务的生成已成功、judge 失败时，checkpoint 保留生成结果，但该行不会进入完成组均值。
+生成/参考指标汇总包含 status=completed 和 judge_failed 的有效结果；judge 指标只统计成功评分并披露有效数量。
+生成成功但 judge 失败时标记 judge_failed，保留生成结果与生成指标，单列评测失败数；比较时也要分析缺失评分偏差。
 吞吐为串行推理的估计，不代表并发服务负载测试或包含检索/UI 的端到端吞吐。
 
 ## 7. 消融的控制方式
@@ -221,3 +221,34 @@ invalid_json 无效 JSON、invalid_verdict 核验格式错误等。不记录供�
 [请求参数](https://api-docs.deepseek.com/api/create-chat-completion)、
 [JSON 输出](https://api-docs.deepseek.com/guides/json_mode)。
 未使用真实密钥验证，不将模拟传输测试视为真实 DeepSeek 推理成功。
+
+
+## 11. 阿里云 Qwen 评测与独立参数
+
+阿里云北京工作空间基础地址格式：
+`https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`。
+可使用模型 `qwen3.8-max`。官方文档说明此模型默认开启思考，混合思考模式可用
+`enable_thinking: false` 关闭。旧版只自动处理 DeepSeek，因此 Qwen 评测可能保持思考，
+增加同步请求耗时；timeout 本身不能证明一定由思考造成。
+
+新版对阿里云 `*.aliyuncs.com` 上的 Qwen3 系列自动关闭思考，使用顶层 JSON 字段
+`enable_thinking`（SDK 的 extra_body 会被合并成该字段），不发送 DeepSeek 的 thinking 字段。
+显式选择开启/关闭时也按供应商转换参数。其他自建或第三方代理不自动识别为阿里云。
+
+网页“最终评估模型”提供“使用 Qwen 3.8 Max 评测配置”按钮，不覆盖你填写的工作空间地址和密钥。
+请填写阿里云自身的 API Key。评测思考、超时和输出预算现在与生成端独立：
+
+- 生成默认：auto / 180 秒 / 8192 tokens。
+- 评测默认：auto / 300 秒 / 4096 tokens。
+- CLI：`--judge-thinking disabled --judge-timeout 300 --judge-max-output-tokens 4096`。
+
+先测试 1 个问题、B 方法、重复 1 次。必要时把评测超时增加到 600 秒。
+所有设置写入 manifest 以便报告复现，但这些配置不保证具体服务实例的容量或可用性。
+当前只执行了模拟请求与流程测试，没有使用真实用户密钥验证。
+
+评测失败不再算作生成失败：checkpoint 中 generation_status=completed、judge_status=failed、
+status=judge_failed；CSV 和网页单列评测失败。生成延迟、token、成本及可用参考指标继续汇总；
+未得到的评测分数保持缺失，不填 0。过去版本已有的 ZIP 不会被自动改写。
+
+官方参考：[深度思考](https://help.aliyun.com/zh/model-studio/deep-thinking)、
+[OpenAI 兼容接口](https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope)。

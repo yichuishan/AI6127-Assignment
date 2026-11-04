@@ -21,6 +21,16 @@ class DeepSeekTransportTests(unittest.TestCase):
         self.assertEqual(body['max_tokens'],8192)
         self.assertEqual(call.call_args.kwargs['timeout'],180)
 
+    def test_aliyun_qwen_uses_enable_thinking_in_raw_json(self):
+        for mode, expected in [('auto',False),('disabled',False),('enabled',True)]:
+            with patch('rag_generator.urlopen',return_value=self.response()) as call:
+                OpenAICompatibleClient(base_url='https://llm-test.cn-beijing.maas.aliyuncs.com/compatible-mode/v1',api_key='test',thinking=mode).complete([], 'qwen3.8-max')
+            body=json.loads(call.call_args.args[0].data)
+            self.assertIs(body['enable_thinking'],expected)
+            self.assertNotIn('thinking',body)
+            self.assertNotIn('extra_body',body)
+            self.assertEqual(body['response_format'],{'type':'json_object'})
+
     def test_other_providers_do_not_receive_deepseek_parameters(self):
         with patch('rag_generator.urlopen',return_value=self.response()) as call:
             OpenAICompatibleClient(base_url='https://example.com/v1',api_key='test-key').complete([], 'other-model')

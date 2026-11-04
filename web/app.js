@@ -24,8 +24,9 @@ function render(job) {
   $('completed').textContent=`${job.completed} / ${job.total||'—'}`;
   $('api-calls').textContent=job.api_calls;
   $('failed').textContent=job.failed;
+  $('judge-failed').textContent=job.judge_failed||0;
   $('stage').textContent=job.stop_reason||job.stage;
-  $('status').textContent=({running:'运行中',completed:job.failed?'已结束 · 有失败项':'已完成',stopped:'已停止',failed:'运行失败'})[job.status]||job.status;
+  $('status').textContent=({running:'运行中',completed:job.failed?'已结束 · 有失败项':job.judge_failed?'已结束 · 评测未全部完成':'已完成',stopped:'已停止',failed:'运行失败'})[job.status]||job.status;
   const elapsed=Math.max(0,Math.floor((job.finished_at||Date.now()/1000)-job.started_at));
   $('elapsed').textContent=`${String(Math.floor(elapsed/60)).padStart(2,'0')}:${String(elapsed%60).padStart(2,'0')}`;
   $('config-fields').disabled=running; $('start').disabled=running; $('stop').disabled=!running;
@@ -36,11 +37,11 @@ function render(job) {
   if(job.events.length) {
     $('events').replaceChildren();
     [...job.events].reverse().forEach(event=>{
-      const article=document.createElement('article'); article.className='event'+(event.status==='failed'?' error':'');
+      const article=document.createElement('article'); article.className='event'+(['failed','judge_failed'].includes(event.status)?' error':'');
       const head=document.createElement('div'); head.className='event-head';
       const b=document.createElement('b'); b.textContent=names[event.approach];
       const id=document.createElement('small'); id.textContent=event.case_id;
-      const status=document.createElement('span'); status.textContent=event.status==='failed'?`失败 · ${event.error_type}`:'✓ 已完成';
+      const status=document.createElement('span'); status.textContent=event.status==='judge_failed'?'生成成功 · 评测失败':event.status==='failed'?`失败 · ${event.error_type}`:'✓ 已完成';
       head.append(b,id,status); article.append(head);
       if(event.error_message){const p=document.createElement('p');p.textContent=`${event.error_stage?event.error_stage+' · ':''}${event.error_code||''}${event.http_status?' · HTTP '+event.http_status:''}：${event.error_message}`;article.append(p);}
       if(event.summary){const p=document.createElement('p');p.textContent=event.summary;article.append(p);}
@@ -59,6 +60,7 @@ async function poll() {
 $('experiment-form').addEventListener('input',estimate);
 $('smoke-preset').onclick=()=>{$('limit').value=3;estimate();};
 $('deepseek-preset').onclick=()=>{$('base-url').value='https://api.deepseek.com';$('model').value='deepseek-v4-pro';$('thinking').value='auto';$('max-output-tokens').value=8192;$('timeout').value=180;estimate();};
+$('qwen-judge-preset').onclick=()=>{$('judge-model').value='qwen3.8-max';$('judge-thinking').value='disabled';$('judge-max-output-tokens').value=4096;$('judge-timeout').value=300;estimate();};
 $('full-preset').onclick=()=>{$('limit').value=100;estimate();};
 $('experiment-form').addEventListener('submit',async event=>{
   event.preventDefault();alertMessage('');$('start').disabled=true;
@@ -71,6 +73,7 @@ $('experiment-form').addEventListener('submit',async event=>{
       judge_model:$('judge-model').value,judge_base_url:$('judge-base-url').value,judge_api_key:$('judge-api-key').value,
       limit:number('limit'),repeats:number('repeats'),max_claims:number('max-claims'),approaches:arms,
       max_output_tokens:number('max-output-tokens'),timeout:number('timeout'),thinking:$('thinking').value,
+      judge_max_output_tokens:number('judge-max-output-tokens'),judge_timeout:number('judge-timeout'),judge_thinking:$('judge-thinking').value,
       reference_metrics:['rouge','bertscore'].filter(id=>$(id).checked),dataset_jsonl:file?await file.text():''};
     for(const id of ['input-price','output-price','judge-input-price','judge-output-price'])body[id.replaceAll('-','_')]=number(id);
     const job=await request('/api/jobs',body);

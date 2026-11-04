@@ -114,10 +114,11 @@ def summarize(rows, seed=42):
         groups[(row['retriever'], row['approach'])].append(row)
     table = []
     for (retriever, arm), group in sorted(groups.items()):
-        ok = [r for r in group if r['status'] == 'completed']
+        ok = [r for r in group if r['status'] in ('completed','judge_failed')]
         metrics = sorted({k for r in ok for k in r['metrics']})
-        item = {'retriever': retriever, 'approach': arm, 'attempted': len(group), 'completed': len(ok),
-                'failed': len(group)-len(ok)}
+        item = {'retriever': retriever, 'approach': arm, 'attempted': len(group), 'completed': sum(r['status']=='completed' for r in group),
+                'generation_completed':len(ok),'judge_failed':sum(r['status']=='judge_failed' for r in group),
+                'failed': sum(r['status']=='failed' for r in group)}
         for metric in metrics:
             values = [r['metrics'][metric] for r in ok if r['metrics'].get(metric) is not None]
             item[metric] = statistics.mean(values) if values else None
@@ -134,8 +135,8 @@ def summarize(rows, seed=42):
     rng = random.Random(seed)
     for retriever in sorted({r['retriever'] for r in rows}):
         for a,b in itertools.combinations(APPROACHES,2):
-            left = {(r['case_id'],r['repeat']):r for r in rows if r['retriever']==retriever and r['approach']==a and r['status']=='completed'}
-            right = {(r['case_id'],r['repeat']):r for r in rows if r['retriever']==retriever and r['approach']==b and r['status']=='completed'}
+            left = {(r['case_id'],r['repeat']):r for r in rows if r['retriever']==retriever and r['approach']==a and r['status'] in ('completed','judge_failed')}
+            right = {(r['case_id'],r['repeat']):r for r in rows if r['retriever']==retriever and r['approach']==b and r['status'] in ('completed','judge_failed')}
             keys = sorted(left.keys() & right.keys())
             for metric in ('rougeL_f1','bertscore_f1','faithfulness','relevance','key_point_coverage','latency_seconds','estimated_cost_usd'):
                 # Cluster repeated runs within each query before bootstrapping query units.
@@ -166,14 +167,15 @@ def export_report(out, rows, seed):
         writer=csv.DictWriter(f,fieldnames=fields);writer.writeheader();writer.writerows(table)
     save(out/'generation_results.json',rows)
     text=['# Generation experiment report','',
+        'Generation metrics include judge_failed rows; judge scores use available valid judgments and disclose counts.',
         'Scores are estimates unless explicitly human-labeled. Missing metrics are unavailable, never zero.',
         'Cached B/C/D drafts are shared. Latency/token/cost metrics include the logical draft cost for every arm.',
         'Cached benchmark rankings are condensed to annotated chunks; these are not production retrieval latency/results.',
         'Bootstrap intervals use queries as units; one-query intervals cannot establish significance.','',
-        '| Retriever | Arm | Completed | Failed | Faithfulness (1–5) | Relevance (1–5) | ROUGE-L | Latency s |',
-        '|---|---|---:|---:|---:|---:|---:|---:|']
+        '| Retriever | Arm | Completed | Generation completed | Judge failed | Failed | Faithfulness (1–5) | Relevance (1–5) | ROUGE-L | Latency s |',
+        '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|']
     for r in table:
-        text.append('| '+' | '.join(str(r.get(k,'N/A')) for k in ['retriever','approach','completed','failed','faithfulness','relevance','rougeL_f1','latency_seconds'])+' |')
+        text.append('| '+' | '.join(str(r.get(k,'N/A')) for k in ['retriever','approach','completed','generation_completed','judge_failed','failed','faithfulness','relevance','rougeL_f1','latency_seconds'])+' |')
     text += ['', 'See summary.csv for coverage counts, context metrics, refusal, token use, repair, P50/P95 and costs.',
              'See report_data.json for paired differences and confidence intervals. Human agreement requires separate independent annotations.']
     with (out/'human_claim_audit.csv').open('w',newline='',encoding='utf-8') as f:
@@ -223,7 +225,7 @@ def run(args, client=None, judge_client=None, *, progress=None, stop_requested=N
     if args.api_key_file: os.environ['GENERATION_API_KEY']=Path(args.api_key_file).read_text().strip()
     transport=client or OpenAICompatibleClient(base_url=args.base_url,timeout=args.timeout,max_tokens=args.max_output_tokens,thinking=args.thinking)
     judge_transport=judge_client or OpenAICompatibleClient(base_url=args.judge_base_url or args.base_url,
-        api_key=Path(args.judge_key_file).read_text().strip() if args.judge_key_file else os.getenv('JUDGE_API_KEY') or None,timeout=args.timeout,max_tokens=args.max_output_tokens,thinking=args.thinking)
+        api_key=Path(args.judge_key_file).read_text().strip() if args.judge_key_file else os.getenv('JUDGE_API_KEY') or None,timeout=args.judge_timeout,max_tokens=args.judge_max_output_tokens,thinking=args.judge_thinking)
     rouge=None
     if 'rouge' in args.reference_metrics:
         from rouge_score.rouge_scorer import RougeScorer
@@ -240,7 +242,9 @@ def run(args, client=None, judge_client=None, *, progress=None, stop_requested=N
         if key in done: continue
         if stop_requested and stop_requested(): break
         row={'case_id':case['id'],'repeat':repeat,'approach':arm,'retriever':case.get('retriever','provided'),
-             'query_type':case.get('query_type','unspecified'),'status':'completed','metrics':{}}
+             'query_type':case.get('query_type','unspecified'),'status':'completed','metrics':{},
+             'generation_status':'pending','judge_status':'pending' if args.judge_model else 'not_requested'}
+        phase='generation'
         try:
             dc=DraftClient(transport,out/('draft_'+digest([case['id'],repeat])+'.json'))
             result=generate_summary(case['query'],case['results'],approach=arm,model=args.model,client=dc,
@@ -252,6 +256,7 @@ def run(args, client=None, judge_client=None, *, progress=None, stop_requested=N
                 result['latency_seconds']+=dc.replayed['latency_seconds']-first['latency_seconds']
                 first['latency_seconds']=dc.replayed['latency_seconds'];first['shared_draft']=True
             row['result']=result
+            row['generation_status']='completed'
             m=row['metrics']; v=result['validation']
             m.update(context_metrics(case,build_context(case['results'],args.max_context_chars,args.max_chunk_chars)))
             m.update(latency_seconds=result['latency_seconds'],model_calls=len(result['stage_calls']),
@@ -264,6 +269,7 @@ def run(args, client=None, judge_client=None, *, progress=None, stop_requested=N
                 if rouge: m.update({k+'_f1':v.fmeasure for k,v in rouge.score(case['reference'],pred).items()})
                 if scorer: m['bertscore_f1']=scorer.score([pred],[case['reference']])[2][0].item()
             if args.judge_model:
+                phase='judge'
                 # Judge sees exactly the evidence available to generation, including custom truncation.
                 exact=[{'chunk_id':x['chunk_id'],'text':x['text'],'metadata':{'game_name':x['game_name'],'source_url':x['source_url']}}
                        for x in build_context(case['results'],args.max_context_chars,args.max_chunk_chars)]
@@ -271,6 +277,7 @@ def run(args, client=None, judge_client=None, *, progress=None, stop_requested=N
                 judge=judge_result(case['query'],result,exact,judge_transport,args.judge_model,case.get('key_points'),
                     context=build_context(case['results'],args.max_context_chars,args.max_chunk_chars),detailed=True)
                 row['judge']=judge
+                row['judge_status']='completed'
                 row['judge_latency_seconds']=time.perf_counter()-judge_started
                 ju=judge['usage']
                 m['judge_prompt_tokens']=ju.get('prompt_tokens');m['judge_completion_tokens']=ju.get('completion_tokens')
@@ -285,7 +292,10 @@ def run(args, client=None, judge_client=None, *, progress=None, stop_requested=N
                 if points: m['key_point_coverage']=statistics.mean(p['covered'] for p in points)
         except Exception as error:
             # Never serialize raw API exceptions, credentials, or request headers.
-            row['status']='failed';row.update(safe_error(error))
+            row['status']='judge_failed' if phase=='judge' else 'failed'
+            row['judge_status']='failed' if phase=='judge' else row['judge_status']
+            if row['generation_status']=='pending':row['generation_status']='failed'
+            row.update(safe_error(error))
         with checkpoint.open('a',encoding='utf-8') as f:
             f.write(json.dumps(row,ensure_ascii=False)+'\n');f.flush();os.fsync(f.fileno())
         rows.append(row)
@@ -327,6 +337,9 @@ def parser():
     a.add_argument('--bertscore-model',default='roberta-large');a.add_argument('--device',default='cpu')
     for name,default in [('repeats',1),('seed',42),('max-claims',6),('max-context-chars',24000),('max-chunk-chars',4000),('timeout',180),('max-output-tokens',8192)]:a.add_argument('--'+name,type=int,default=default)
     a.add_argument('--thinking',choices=['auto','disabled','enabled'],default='auto')
+    a.add_argument('--judge-thinking',choices=['auto','disabled','enabled'],default='auto')
+    a.add_argument('--judge-timeout',type=int,default=300)
+    a.add_argument('--judge-max-output-tokens',type=int,default=4096)
     a.add_argument('--limit',type=int);a.add_argument('--preflight',action='store_true')
     a.add_argument('--input-price',type=float);a.add_argument('--output-price',type=float)
     a.add_argument('--judge-input-price',type=float);a.add_argument('--judge-output-price',type=float)
@@ -336,7 +349,7 @@ def parser():
 
 def main():
     args=parser().parse_args()
-    for field in ('repeats','top_k','limit','timeout'):
+    for field in ('repeats','top_k','limit','timeout','judge_timeout'):
         value=getattr(args,field,None)
         if value is not None and value<1: raise SystemExit(field+' must be positive')
     for field in ('input_price','output_price','judge_input_price','judge_output_price'):
