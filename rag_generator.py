@@ -5,6 +5,9 @@ import argparse
 import json
 import math
 import os
+import socket
+import ssl
+from urllib.error import HTTPError, URLError
 from pathlib import Path
 import time
 from urllib.parse import urlparse
@@ -16,8 +19,51 @@ VERDICTS = ('supported', 'partially_supported', 'contradicted', 'unsupported')
 ABSTENTION = 'The retrieved reviews do not provide sufficient evidence to answer this question.'
 
 
+ERROR_MESSAGES = {
+    'generation_error': '生成或评估失败，请查看错误阶段与配置。',
+    'missing_key': '缺少 API Key。',
+    'http_400': 'API 拒绝请求（400）：检查模型名称、参数和 JSON 模式支持。',
+    'http_401': '认证失败（401）：检查密钥及其所属服务。',
+    'http_402': '账户余额不足或计费不可用（402）。',
+    'http_403': '服务拒绝访问（403）：检查账户权限或网络限制。',
+    'http_404': '接口或模型不存在（404）：检查 API 基础地址和模型名。',
+    'http_422': '请求参数不被接受（422）：检查模型和参数兼容性。',
+    'http_429': '请求被限流或配额不足（429），本程序不会自动付费重试。',
+    'http_5xx': '模型服务暂时异常（5xx），请稍后重试。',
+    'http_error': '模型 API 返回 HTTP 错误。',
+    'timeout': '模型请求超时；思考模式可关闭或增加请求超时。',
+    'tls_error': 'TLS 证书验证失败，请检查本机证书和代理配置。',
+    'network_error': '无法连接模型 API，请检查地址、网络和代理。',
+    'response_schema': 'API 返回结构不是预期的 Chat Completions 格式。',
+    'output_truncated': '输出达到 token 上限而截断；增加输出预算，或关闭 DeepSeek 思考模式。',
+    'empty_content': 'API 返回空白正文；可能是 JSON 模式输出空白或思考耗尽预算。',
+    'invalid_json': '模型正文不是有效 JSON，无法解析。',
+    'invalid_claims': '模型未返回符合要求的 claims 列表，或观点数超过限制。',
+    'invalid_verdict': '验证器返回的判定格式不符合要求。',
+    'invalid_revision': '修订器未返回要求的 claim 字段。',
+    'invalid_judge': '最终评估模型返回的评分格式不符合要求。',
+}
+
+
 class GenerationError(RuntimeError):
-    """API or model-output error; never exposes credentials or raw responses."""
+    """Safe structured errors; never retain raw provider bodies or credentials."""
+    def __init__(self, message, *, code='generation_error', http_status=None, stage=None):
+        super().__init__(message)
+        self.code = code if code in ERROR_MESSAGES else 'generation_error'
+        self.http_status = http_status
+        self.stage = stage
+
+
+def safe_error(error):
+    if not isinstance(error, GenerationError):
+        return {'error_type': type(error).__name__, 'error_message': '运行失败，请检查输入、依赖和配置。'}
+    result = {'error_type': type(error).__name__, 'error_code': error.code,
+              'error_message': ERROR_MESSAGES[error.code]}
+    if error.http_status is not None:
+        result['http_status'] = error.http_status
+    if error.stage in ('generate', 'verify', 'revise', 'reverify', 'judge'):
+        result['error_stage'] = error.stage
+    return result
 
 
 def load_retrieval(path):
@@ -58,10 +104,15 @@ def build_context(hits, max_context_chars=24000, max_chunk_chars=4000):
 
 class OpenAICompatibleClient:
     """Chat Completions transport using inherited proxy and TLS trust."""
-    def __init__(self, base_url=None, api_key=None, timeout=60):
+    def __init__(self, base_url=None, api_key=None, timeout=180, max_tokens=8192, thinking='auto'):
         self.base_url = (base_url or os.getenv('GENERATION_BASE_URL', 'https://api.openai.com/v1')).rstrip('/')
         self.api_key = api_key or os.getenv('GENERATION_API_KEY') or os.getenv('OPENAI_API_KEY')
         self.timeout = timeout
+        if type(max_tokens) is not int or not 256 <= max_tokens <= 131072:
+            raise ValueError('max_tokens must be 256..131072')
+        if thinking not in ('auto', 'disabled', 'enabled'):
+            raise ValueError('Invalid thinking mode')
+        self.max_tokens, self.thinking = max_tokens, thinking
         parsed = urlparse(self.base_url)
         if parsed.scheme not in ('https', 'http') or not parsed.netloc or parsed.username or parsed.password:
             raise ValueError('Invalid API base URL')
@@ -70,9 +121,14 @@ class OpenAICompatibleClient:
 
     def complete(self, messages, model, temperature=0):
         if not self.api_key and urlparse(self.base_url).hostname not in ('localhost', '127.0.0.1', '::1'):
-            raise GenerationError('Set GENERATION_API_KEY or OPENAI_API_KEY for hosted inference')
+            raise GenerationError('Set GENERATION_API_KEY or OPENAI_API_KEY for hosted inference', code='missing_key')
         payload = {'model': model, 'messages': messages, 'temperature': temperature,
-                   'max_tokens': 1800, 'response_format': {'type': 'json_object'}}
+                   'max_tokens': self.max_tokens, 'response_format': {'type': 'json_object'}}
+        thinking = self.thinking
+        if thinking == 'auto' and urlparse(self.base_url).hostname == 'api.deepseek.com' and (model.startswith('deepseek-v4') or model == 'deepseek-flash'):
+            thinking = 'disabled'
+        if thinking != 'auto':
+            payload['thinking'] = {'type': thinking}
         headers = {'Content-Type': 'application/json'}
         if self.api_key:
             headers['Authorization'] = 'Bearer ' + self.api_key
@@ -80,9 +136,34 @@ class OpenAICompatibleClient:
         try:
             with urlopen(request, timeout=self.timeout) as response:
                 data = json.load(response)
-            return {'content': data['choices'][0]['message']['content'], 'usage': data.get('usage', {})}
+        except HTTPError as error:
+            status = error.code
+            code = 'http_' + str(status)
+            if code not in ERROR_MESSAGES:
+                code = 'http_5xx' if 500 <= status < 600 else 'http_error'
+            raise GenerationError(ERROR_MESSAGES[code], code=code, http_status=status) from None
+        except (TimeoutError, socket.timeout):
+            raise GenerationError(ERROR_MESSAGES['timeout'], code='timeout') from None
+        except URLError as error:
+            code = 'tls_error' if isinstance(error.reason, ssl.SSLCertVerificationError) else 'timeout' if isinstance(error.reason, (TimeoutError, socket.timeout)) else 'network_error'
+            raise GenerationError(ERROR_MESSAGES[code], code=code) from None
         except Exception:
-            raise GenerationError('Model request failed; check endpoint, access, model and credentials') from None
+            raise GenerationError(ERROR_MESSAGES['response_schema'], code='response_schema') from None
+        try:
+            choice = data['choices'][0]
+            if choice.get('finish_reason') == 'length':
+                raise GenerationError(ERROR_MESSAGES['output_truncated'], code='output_truncated')
+            content = choice['message'].get('content')
+            if content is None or (isinstance(content, str) and not content.strip()):
+                raise GenerationError(ERROR_MESSAGES['empty_content'], code='empty_content')
+            if not isinstance(content, str):
+                raise ValueError()
+            return {'content': content, 'usage': data.get('usage', {})}
+        except GenerationError:
+            raise
+        except (KeyError, IndexError, TypeError, ValueError):
+            raise GenerationError(ERROR_MESSAGES['response_schema'], code='response_schema') from None
+
 
 
 def validate_claim(claim, sources, require_quotes=True):
@@ -147,7 +228,11 @@ def generate_summary(query, hits, *, approach='verify_revise', model=None, clien
         messages = [{'role': 'system', 'content': (PROMPTS / (prompt + '.txt')).read_text(encoding='utf-8')},
                     {'role': 'user', 'content': json.dumps(payload, ensure_ascii=False)}]
         call_started = time.perf_counter()
-        response = transport.complete(messages, model=model, temperature=0)
+        try:
+            response = transport.complete(messages, model=model, temperature=0)
+        except GenerationError as error:
+            error.stage = stage
+            raise
         result['stage_calls'].append({'stage': stage, 'claim_id': claim_id, 'model': model,
                                       'latency_seconds': round(time.perf_counter() - call_started, 6),
                                       'usage': response.get('usage') or {}})
@@ -157,13 +242,13 @@ def generate_summary(query, hits, *, approach='verify_revise', model=None, clien
                 raise ValueError()
             return data
         except (ValueError, TypeError, KeyError):
-            raise GenerationError('Invalid JSON object from ' + stage) from None
+            raise GenerationError('Invalid JSON object from ' + stage, code='invalid_json', stage=stage) from None
 
     def verify(claim, claim_id, stage):
         data = invoke(stage, 'verify', {'question': query, 'claim': claim, 'evidence': context}, claim_id)
         if (data.get('verdict') not in VERDICTS
                 or not isinstance(data.get('reason'), str) or not data['reason'].strip()):
-            raise GenerationError('Invalid semantic verification result')
+            raise GenerationError('Invalid semantic verification result', code='invalid_verdict', stage=stage)
         return {'verdict': data['verdict'], 'reason': data['reason']}
 
     if context:
@@ -171,7 +256,7 @@ def generate_summary(query, hits, *, approach='verify_revise', model=None, clien
                         {'question': query, 'evidence': context, 'max_claims': max_claims})
         claims = output.get('claims')
         if not isinstance(claims, list) or len(claims) > max_claims:
-            raise GenerationError('Model must return a claims list within max_claims')
+            raise GenerationError('Model must return a claims list within max_claims', code='invalid_claims', stage='generate')
         stats = result['validation']
         stats['generated_claims'] = len(claims)
         accepted = []
@@ -201,7 +286,7 @@ def generate_summary(query, hits, *, approach='verify_revise', model=None, clien
                 repair = invoke('revise', 'revise', {'question': query, 'claim': claim,
                                 'verification': first, 'evidence': context}, claim_id)
                 if 'claim' not in repair:
-                    raise GenerationError('Revision must contain claim (object or null)')
+                    raise GenerationError('Revision must contain claim (object or null)', code='invalid_revision', stage='revise')
                 audit['revision_candidate'] = repair['claim']
                 revised = validate_claim(repair['claim'], sources)
                 if revised is not None:

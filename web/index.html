@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Evidence Lab · RAG 实验台</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+<div class="shell">
+<aside><a class="brand" href="/">e<span>·</span>lab</a><div class="project">AI6127 / GENERATION</div><nav><a class="active" href="#workspace">◉　实验工作台</a><a href="#results">▤　运行与结果</a><a href="#notes">↗　数据说明</a></nav><div class="aside-foot"><span class="dot"></span> 当前环境 · 草稿<br><small>模型通过你指定的 API 运行</small></div></aside>
+<main id="workspace">
+<header><div class="eyebrow">EVIDENCE-GROUNDED SUMMARIZATION</div><div class="headline"><div><h1>把证据，变成可验证的总结。</h1><p>配置模型，运行受控消融，一次导出报告所需的实验数据。</p></div><span class="badge">RAG 实验台 <b>01</b></span></div></header>
+<div class="dataset-banner"><div class="dataset-icon">▦</div><div><strong>Steam 评论生成基准</strong><p id="dataset-info">正在读取测试输入…</p></div><span class="pill">固定检索证据</span></div>
+<div id="alert" role="alert" hidden></div>
+<div class="grid">
+<section class="panel config"><div class="section-head"><span class="step">01</span><h2>配置实验</h2></div>
+<form id="experiment-form">
+<fieldset id="config-fields">
+<label>API 地址 <span>OpenAI 兼容接口</span><input id="base-url" type="url" value="https://api.openai.com/v1" placeholder="https://your-provider.com/v1" required></label>
+<p class="hint">支持填写基础地址或完整的 /chat/completions 地址。</p>
+<div class="presets"><button type="button" id="deepseek-preset">使用 DeepSeek V4 Pro 配置</button></div>
+<div class="two"><label>模型名称<input id="model" value="gpt-4o-mini" required maxlength="200"></label><label>API Key<input id="api-key" type="password" autocomplete="off" placeholder="输入你的密钥" required></label></div>
+<p class="privacy">⌑ 密钥仅用于本次服务端请求，不写入结果文件或浏览器存储。</p>
+<details><summary>最终评估模型 <span>可选</span></summary><label>评估模型名称<input id="judge-model" placeholder="留空则只运行生成和性能测量"></label><div class="two"><label>评估 API 地址<input id="judge-base-url" type="url" placeholder="留空沿用生成 API"></label><label>评估 API Key<input id="judge-api-key" type="password" autocomplete="off" placeholder="留空沿用生成密钥"></label></div><p class="hint">建议使用不同模型进行独立评分。启用后会增加 API 调用及费用。</p></details>
+<details><summary>请求兼容设置 <span>DeepSeek / 输出预算</span></summary>
+<label>思考模式<select id="thinking"><option value="auto">自动：DeepSeek V4 / Flash 关闭思考</option><option value="disabled">显式关闭思考（需 API 支持）</option><option value="enabled">显式开启思考（需 API 支持）</option></select></label>
+<div class="two"><label>最大输出 tokens<input id="max-output-tokens" type="number" min="256" max="131072" value="8192"></label><label>请求超时（秒）<input id="timeout" type="number" min="10" max="600" value="180"></label></div>
+<p class="hint">DeepSeek V4 默认开启思考。建议先关闭思考完成基础实验；开启时可能需要更大输出预算和更长超时，费用也会变化。</p></details>
+<div class="divider"></div>
+<div class="label-row"><h3>实验方法</h3><span>B / C / D 共用同一份草稿</span></div>
+<div class="arms">
+<label class="arm"><input type="checkbox" name="arm" value="baseline" checked><span class="arm-letter">A</span><div><strong>Baseline</strong><small>带来源引用的基础总结</small></div></label>
+<label class="arm"><input type="checkbox" name="arm" value="improved" checked><span class="arm-letter">B</span><div><strong>Evidence quotes</strong><small>结构化观点 + 精确证据摘录</small></div></label>
+<label class="arm"><input type="checkbox" name="arm" value="verify_delete" checked><span class="arm-letter">C</span><div><strong>Verify & delete</strong><small>核验并删除不受支持的观点</small></div></label>
+<label class="arm"><input type="checkbox" name="arm" value="verify_revise" checked><span class="arm-letter">D</span><div><strong>Verify & revise</strong><small>修订观点，再次核验</small></div></label>
+</div>
+<div class="three"><label>问题数量<input id="limit" type="number" min="1" max="1000" value="3"></label><label>重复次数<input id="repeats" type="number" min="1" max="5" value="1"></label><label>最多观点数<input id="max-claims" type="number" min="1" max="12" value="4"></label></div>
+<div class="presets"><button type="button" id="smoke-preset">先试跑 3 个问题</button><button type="button" id="full-preset">全部 100 个问题</button></div>
+<details><summary>人工标注与参考指标 <span>可选</span></summary><label>上传测试集 JSONL<input id="dataset-file" type="file" accept=".jsonl,application/json,text/plain"></label><p class="hint">不上传则使用内置数据。ROUGE/BERTScore 需要逐条人工 reference；关键点覆盖率需要 key_points 与评估模型。</p><div class="checks"><label><input id="rouge" type="checkbox"> ROUGE</label><label><input id="bertscore" type="checkbox"> BERTScore</label></div><p class="hint">参考指标需服务端安装对应依赖；BERTScore 首次运行还需下载模型。</p></details>
+<details><summary>成本估算 <span>USD / 百万 tokens</span></summary><div class="two"><label>生成输入价格<input id="input-price" type="number" min="0" step="any" placeholder="留空不估算"></label><label>生成输出价格<input id="output-price" type="number" min="0" step="any" placeholder="留空不估算"></label><label>评估输入价格<input id="judge-input-price" type="number" min="0" step="any" placeholder="留空不估算"></label><label>评估输出价格<input id="judge-output-price" type="number" min="0" step="any" placeholder="留空不估算"></label></div></details>
+</fieldset>
+<div class="launch"><div><strong id="estimate">12 项实验输出</strong><small id="call-estimate">按实际 API 调用计费</small></div><button type="submit" id="start">开始实验 <span>↗</span></button></div>
+<p class="hint launch-hint">点击开始会将所选评论发送到你指定的模型服务，并产生该服务的 API 费用。</p>
+</form></section>
+<div class="right-column" id="results">
+<section class="panel monitor"><div class="section-head"><span class="step">02</span><h2>运行进度</h2><span id="status" class="status">准备就绪</span></div><div class="progress-title"><strong id="percentage">0<span>%</span></strong><p id="stage">配置完成后，即可开始实验</p></div><progress id="progress" value="0" max="100"></progress><div class="stat-grid"><div><span>已完成 / 总任务</span><strong id="completed">0 / —</strong></div><div><span>运行时间</span><strong id="elapsed">00:00</strong></div><div><span>API 请求数</span><strong id="api-calls">0</strong></div><div><span>失败任务</span><strong id="failed">0</strong></div></div><div class="monitor-actions"><button id="stop" disabled>停止实验</button><a id="download" class="download disabled" aria-disabled="true">下载结果 ZIP ↓</a></div><p class="hint">停止会在当前 API 请求结束后生效。关闭页面不会停止服务端任务，可返回查看。</p></section>
+<section class="panel activity"><div class="section-head"><span class="step">03</span><h2>实时输出</h2><span class="muted">最近 30 项</span></div><div id="events" aria-live="polite"><div class="empty"><div>⌁</div><strong>等待第一份总结</strong><p>每项完成后，显示方法、结果状态与总结预览。</p></div></div></section>
+<section class="notes" id="notes"><h3>关于这次实验</h3><p>内置输入为指定 GitHub 版本中的 100 个问题，每个问题最多 10 条证据。已保存排名来自已标注子集，适合固定证据的生成消融，不代表线上检索表现。</p><p id="source-status">正在检查数据来源…</p><p>当前内置数据没有人工参考总结。未提供参考或未启用评估的指标会留空，不会自动生成“人工答案”。结果包含原始总结、引用、核验记录、汇总 CSV 和 Markdown 报告。</p></section>
+</div></div>
+<footer>Evidence Lab <span>·</span> AI6127 Generation Experiments <span>·</span> 实验数据留在当前环境</footer>
+</main></div></body></html>
