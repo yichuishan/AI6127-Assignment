@@ -47,3 +47,11 @@ python -m unittest discover -s tests -v
 ```
 
 Tests use scripted clients; passing tests do not establish real LLM quality gains.
+
+
+## Structured fact annotations
+
+[data/generation_annotations/README.md](data/generation_annotations/README.md)
+documents the full 1,000-passage fact bank, 100 query reference sets, reviewable
+condition/contrast candidates, and the model-free `evaluate_fact_selection.py`
+scorer. Human source labels and newly derived annotations have separate provenance.
