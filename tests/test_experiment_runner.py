@@ -60,6 +60,24 @@ class ExperimentTests(unittest.TestCase):
             self.assertNotIn('test-private-secret-123',content)
             self.assertNotIn(str(keyfile),content)
 
+    def test_judge_timeout_preserves_generation_and_aggregates(self):
+        from rag_generator import GenerationError
+        class TimeoutJudge:
+            def complete(self,*a,**k):raise GenerationError('unsafe provider text',code='timeout')
+        rows=run(self.args('--approaches','improved','--judge-model','qwen3.8-max'),ScriptedClient(),TimeoutJudge())
+        row=rows[0]
+        self.assertEqual(row['status'],'judge_failed')
+        self.assertEqual(row['generation_status'],'completed')
+        self.assertEqual(row['judge_status'],'failed')
+        self.assertTrue(row['result']['summary'])
+        self.assertNotIn('faithfulness',row['metrics'])
+        aggregate=summarize(rows)['aggregates'][0]
+        self.assertEqual(aggregate['generation_completed'],1)
+        self.assertEqual(aggregate['judge_failed'],1)
+        self.assertEqual(aggregate['failed'],0)
+        self.assertEqual(aggregate['latency_seconds_n'],1)
+        self.assertNotIn('unsafe provider text',(self.root/'out/checkpoint.jsonl').read_text())
+
     def test_preflight_does_not_call_client(self):
         client=ScriptedClient();run(self.args('--preflight'),client)
         self.assertFalse(client.calls)

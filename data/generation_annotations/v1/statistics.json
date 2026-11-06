@@ -1,0 +1,37 @@
+{
+  "passages": 1000,
+  "facts": 2898,
+  "queries": 100,
+  "source_aspect_pairs": 8000,
+  "sentiment_counts": {
+    "Positive": 1383,
+    "Mixed": 241,
+    "Negative": 1156,
+    "Neutral": 117,
+    "Unclear": 1
+  },
+  "aspect_counts": {
+    "graphics_visuals": 381,
+    "gameplay": 775,
+    "controls": 218,
+    "story": 402,
+    "audio": 266,
+    "performance": 253,
+    "bugs_stability": 310,
+    "online_multiplayer": 293
+  },
+  "quote_alignment": {
+    "exact": 2492,
+    "missing": 406
+  },
+  "condition_candidates": 409,
+  "condition_candidates_linked_to_fact": 185,
+  "contrast_candidates": 39,
+  "required_contrast_groups": 25,
+  "queries_with_required_contrasts": 22,
+  "coverage_units": 227,
+  "queries_without_reference_facts": [
+    "hybrid_rerank/q76"
+  ],
+  "new_labels_human_reviewed": false
+}

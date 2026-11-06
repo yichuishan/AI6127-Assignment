@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 import zipfile
 
 from rag_generator import APPROACHES, OpenAICompatibleClient, safe_error
-from run_generation_experiments import jsonl, parser, run
+from run_fact_experiments import jsonl, run, benchmark, aggregate
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DATASET = ROOT / 'experiments/steam_generation_eval.jsonl'
@@ -64,9 +64,8 @@ class LiveClient:
         if job.stop.is_set():
             raise Cancelled()
         system = messages[0]['content']
-        stage = ('最终评估' if 'Evaluate an answer' in system else
-                 '证据核验' if 'evidence verifier' in system else
-                 '修订观点' if 'Repair one rejected' in system else '生成草稿')
+        stage = ('证据核验' if 'evidence verifier' in system else
+                 '修订观点' if 'Repair one rejected' in system else '选择事实并生成总结')
         with job.lock:
             job.state.update(stage=stage, api_calls=job.state['api_calls'] + 1)
         response = self.transport.complete(messages, model, temperature)
@@ -80,53 +79,50 @@ class Job:
         self.owner, self.directory = owner, directory
         self.lock, self.stop = threading.Lock(), threading.Event()
         self.state = {'id': directory.name, 'status': 'running', 'completed': 0, 'total': 0,
-                      'failed': 0, 'api_calls': 0, 'successful_api_calls': 0,
+                      'failed': 0, 'scored':0, 'aggregates':[], 'api_calls': 0, 'successful_api_calls': 0,
                       'stage': '准备输入', 'events': [], 'started_at': time.time()}
         self.thread = threading.Thread(target=self.execute, args=(data, factory), daemon=True)
 
     def execute(self, data, factory):
         try:
             key = data.pop('api_key')
-            judge_key = data.pop('judge_api_key', '') or key
-            options = dict(max_tokens=data['max_output_tokens'],thinking=data['thinking'],timeout=data['timeout'])
-            client = LiveClient(self, key, data['base_url'], factory,**options)
-            judge = LiveClient(self, judge_key, data.get('judge_base_url') or data['base_url'], factory,**options)
-            # Credentials stay only in the two transport objects, never in config/files/logs.
-            key = judge_key = None
-            dataset = self.directory / 'input.jsonl'
+            client = LiveClient(self,key,data['base_url'],factory,max_tokens=data['max_output_tokens'],
+                                thinking=data['thinking'],timeout=data['timeout'])
+            key = None
             cases = data.pop('cases')
-            dataset.write_text(''.join(json.dumps(c, ensure_ascii=False)+'\n' for c in cases), encoding='utf-8')
-            args = parser().parse_args(['run', str(dataset), '--output', str(self.directory/'results')])
-            for name in ('model', 'base_url', 'judge_model', 'judge_base_url', 'approaches',
-                         'repeats', 'max_claims', 'max_output_tokens', 'thinking', 'timeout', 'reference_metrics', 'input_price', 'output_price',
-                         'judge_input_price', 'judge_output_price'):
-                if name in data:
-                    setattr(args, name, data[name])
+            (self.directory/'input.jsonl').write_text(''.join(json.dumps(c,ensure_ascii=False)+'\n' for c in cases),encoding='utf-8')
             with self.lock:
-                self.state['total'] = len(cases) * args.repeats * len(args.approaches)
+                self.state['total'] = len(cases)*data['repeats']*len(data['approaches'])
             def progress(row, completed, total):
                 with self.lock:
-                    self.state.update(completed=completed, total=total, stage='完成一项实验')
-                    self.state['failed'] += row['status'] == 'failed'
-                    self.state['events'].append({'case_id': row['case_id'], 'approach': row['approach'],
-                        'status': row['status'], 'error_type': row.get('error_type'),
-                        'error_message': row.get('error_message'), 'error_code': row.get('error_code'),
-                        'http_status': row.get('http_status'), 'error_stage': row.get('error_stage'),
-                        'summary': row.get('result', {}).get('summary', '')[:1800]})
-                    self.state['events'] = self.state['events'][-30:]
-                    if len(self.state['events']) >= 3 and all(e['status'] == 'failed' for e in self.state['events'][-3:]):
-                        self.state['stop_reason'] = '连续 3 项实验失败，已自动停止；请检查 API 配置与结果文件。'
+                    self.state.update(completed=completed,total=total,stage='事实 ID 算法评分完成')
+                    self.state['failed'] += row['status']=='failed'
+                    self.state['scored'] += row['status']=='completed'
+                    self.state['events'].append({'case_id':row['case_id'],'approach':row['approach'],
+                        'status':row['status'],'error_type':row.get('error_type'),
+                        'error_message':row.get('error_message'),'error_code':row.get('error_code'),
+                        'http_status':row.get('http_status'),'error_stage':row.get('error_stage'),
+                        'metrics':row['metrics'],
+                        'selected_fact_ids':row.get('result',{}).get('selected_fact_ids',[]),
+                        'summary':row.get('result',{}).get('summary','')[:1800]})
+                    self.state['events']=self.state['events'][-30:]
+                    if len(self.state['events'])>=3 and all(e['status']=='failed' for e in self.state['events'][-3:]):
+                        self.state['stop_reason']='连续 3 项失败，已停止；请检查生成配置与输出格式。'
                         self.stop.set()
-            run(args, client, judge, progress=progress, stop_requested=self.stop.is_set)
+            public_config={k:data[k] for k in ('base_url','max_output_tokens','thinking','timeout','input_price','output_price')}
+            rows=run(cases,self.directory/'results',client=client,model=data['model'],
+                approaches=data['approaches'],repeats=data['repeats'],max_claims=data['max_claims'],
+                input_price=data['input_price'],output_price=data['output_price'],config=public_config,
+                progress=progress,stop_requested=self.stop.is_set)
             with self.lock:
-                self.state.update(status='stopped' if self.stop.is_set() else 'completed', stage='已停止' if self.stop.is_set() else '实验结束')
+                self.state.update(status='stopped' if self.stop.is_set() else 'completed',
+                    stage='已停止' if self.stop.is_set() else '事实选择测试结束',aggregates=aggregate(rows))
         except Exception as error:
             with self.lock:
-                self.state.update(status='failed', stage='运行失败', **safe_error(error))
+                self.state.update(status='failed',stage='运行失败',**safe_error(error))
         finally:
             data.clear()
-            with self.lock:
-                self.state['finished_at'] = time.time()
+            with self.lock:self.state['finished_at']=time.time()
 
     def snapshot(self):
         with self.lock:
@@ -140,66 +136,45 @@ class Application:
         self.factory, self.jobs, self.sessions, self.lock = factory, {}, set(), threading.Lock()
 
     def start(self, owner, data):
-        key = data.get('api_key', '')
-        if not isinstance(key, str) or not key.strip() or len(key) > 4096:
-            raise ValueError('请输入 API Key。')
-        data['api_key'] = key.strip()
-        if not isinstance(data.get('judge_api_key', ''), str) or len(data.get('judge_api_key', '')) > 4096:
-            raise ValueError('评估 API Key 格式无效。')
-        data['base_url'] = endpoint(data.get('base_url', ''))
-        if data.get('judge_base_url'):
-            data['judge_base_url'] = endpoint(data['judge_base_url'])
-        for name in ('model', 'judge_model'):
-            value = data.get(name, '')
-            if not isinstance(value, str) or len(value) > 200 or (name == 'model' and not value.strip()):
-                raise ValueError('请输入有效模型名称。')
-            data[name] = value.strip() or None
-        data['repeats'] = integer(data.get('repeats', 1), 1, 5)
-        data['max_output_tokens'] = integer(data.get('max_output_tokens',8192),256,131072)
-        data['timeout'] = integer(data.get('timeout',180),10,600)
-        data['thinking'] = data.get('thinking','auto')
+        if any(k.startswith('judge_') and v not in (None,'',[]) for k,v in data.items()):
+            raise ValueError('Evaluator models are not supported by this page; refresh the page')
+        allowed={'api_key','base_url','model','repeats','max_output_tokens','timeout','thinking',
+                 'max_claims','limit','approaches','input_price','output_price','dataset_jsonl'}
+        if set(data)-allowed:raise ValueError('Unsupported experiment option')
+        key=data.get('api_key','')
+        if not isinstance(key,str) or not key.strip() or len(key)>4096:raise ValueError('请输入 API Key。')
+        data['api_key']=key.strip();data['base_url']=endpoint(data.get('base_url',''))
+        model=data.get('model','')
+        if not isinstance(model,str) or not model.strip() or len(model)>200:raise ValueError('模型名称无效。')
+        data['model']=model.strip()
+        data['repeats']=integer(data.get('repeats',1),1,5)
+        data['max_output_tokens']=integer(data.get('max_output_tokens',8192),256,131072)
+        data['timeout']=integer(data.get('timeout',180),10,600)
+        data['thinking']=data.get('thinking','auto')
         if data['thinking'] not in ('auto','disabled','enabled'):raise ValueError('思考模式无效。')
-        data['max_claims'] = integer(data.get('max_claims', 4), 1, 12)
-        limit = integer(data.get('limit', 3), 1, 1000)
-        arms = data.get('approaches', list(APPROACHES))
-        if not isinstance(arms, list) or not arms or any(a not in APPROACHES for a in arms) or len(set(arms)) != len(arms):
-            raise ValueError('请选择至少一种有效实验方法。')
-        data['approaches'] = arms
-        metrics = data.get('reference_metrics', [])
-        if not isinstance(metrics, list) or any(m not in ('rouge', 'bertscore') for m in metrics):
-            raise ValueError('指标选择无效。')
-        for name in ('input_price', 'output_price', 'judge_input_price', 'judge_output_price'):
-            value = data.get(name)
-            if value is not None and (type(value) not in (float, int) or not math.isfinite(value) or value < 0):
-                raise ValueError('价格应为非负数字或留空。')
-        text = data.pop('dataset_jsonl', '')
-        cases = [json.loads(line) for line in text.splitlines() if line.strip()] if text else jsonl(DEFAULT_DATASET)
-        cases = cases[:limit]
-        if not cases or any(not isinstance(c, dict) or not isinstance(c.get('id'), str) or not c['id'].strip() for c in cases):
-            raise ValueError('数据集需要非空字符串 id。')
-        if len({c['id'] for c in cases}) != len(cases):
-            raise ValueError('数据集 id 重复。')
-        from rag_generator import build_context
-        for c in cases:
-            if not isinstance(c.get('query'), str) or not c['query'].strip() or len(c['query']) > 8000:
-                raise ValueError('数据集 query 无效。')
-            build_context(c['results'])
-        if metrics:
-            import importlib.util
-            for metric, module in [('rouge', 'rouge_score'), ('bertscore', 'bert_score')]:
-                if metric in metrics and not importlib.util.find_spec(module):
-                    raise ValueError('当前环境未安装所选参考指标依赖，请先安装 requirements-generation-eval.txt。')
-            if any(not c.get('reference') for c in cases):
-                raise ValueError('所选参考指标需要每条输入具有人工 reference，请上传已标注 JSONL。')
-        data['cases'] = cases
+        data['max_claims']=integer(data.get('max_claims',4),1,12)
+        limit=integer(data.get('limit',3),1,100)
+        arms=data.get('approaches',list(APPROACHES))
+        if not isinstance(arms,list) or not arms or len(set(arms))!=len(arms) or any(a not in APPROACHES for a in arms):
+            raise ValueError('实验方法无效。')
+        data['approaches']=arms
+        for name in ('input_price','output_price'):
+            value=data.get(name)
+            if value is not None and (type(value) not in (float,int) or not math.isfinite(value) or value<0):raise ValueError('价格无效。')
+            data[name]=value
+        text=data.pop('dataset_jsonl','')
+        cases=[json.loads(line) for line in text.splitlines() if line.strip()] if text else jsonl(DEFAULT_DATASET)
+        cases=cases[:limit]
+        if not cases or any(not isinstance(c,dict) or not isinstance(c.get('id'),str) for c in cases) or len({c['id'] for c in cases})!=len(cases):
+            raise ValueError('案例 ID 无效或重复。')
+        benchmark(cases)
+        # Discard any extra uploaded fields; persist the known canonical cases only.
+        canonical={c['id']:c for c in jsonl(DEFAULT_DATASET)}
+        data['cases']=[canonical[c['id']] for c in cases]
         with self.lock:
-            if any(j.snapshot()['status'] == 'running' for j in self.jobs.values()):
-                raise ValueError('已有实验运行中，请等待或停止后再开始。')
-            directory = self.run_root / secrets.token_hex(16)
-            directory.mkdir(mode=0o700)
-            job = Job(owner, data, directory, self.factory)
-            self.jobs[directory.name] = job
-            job.thread.start()
+            if any(j.snapshot()['status']=='running' for j in self.jobs.values()):raise ValueError('已有实验运行中。')
+            directory=self.run_root/secrets.token_hex(16);directory.mkdir(mode=0o700)
+            job=Job(owner,data,directory,self.factory);self.jobs[directory.name]=job;job.thread.start()
         return job
 
 
@@ -249,7 +224,7 @@ def server(host='127.0.0.1', port=8080, application=None):
                 return self.send(401, {'error': '请先打开页面。'})
             if path == '/api/info':
                 cases = jsonl(DEFAULT_DATASET)
-                return self.send(200, {'cases': len(cases), 'references': sum(bool(c.get('reference')) for c in cases),
+                return self.send(200, {'cases': len(cases), 'fact_count':2898, 'evaluation_method':'exact_fact_id_matching_v1',
                     'dataset_status': '已验证网站及标注接口 HTTP 200；1,000 条在线标注与指定 GitHub 版本完全一致（2026-11-04）。',
                     'dataset_access': json.loads((ROOT/'experiments/dataset_access.json').read_text()) if (ROOT/'experiments/dataset_access.json').exists() else None,
                     'jobs': [j.snapshot() for j in app.jobs.values() if j.owner == owner]})
@@ -301,7 +276,7 @@ def server(host='127.0.0.1', port=8080, application=None):
                 self.send(404, {'error': '未找到。'})
             except (ValueError, KeyError, TypeError):
                 # Validation errors are intentionally generic: never echo user inputs/keys.
-                self.send(400, {'error': '配置或数据格式无效：检查 HTTPS API 地址、模型、样本数、方法和人工参考；参考指标还需安装依赖。'})
+                self.send(400, {'error': '配置或数据格式无效：请刷新新版页面，仅填写生成模型；上传案例须与已标注的100题基准一致。'})
             except Exception:
                 self.send(500, {'error': '无法启动任务，请检查服务器配置。'})
     return ThreadingHTTPServer((host, port), Handler)
