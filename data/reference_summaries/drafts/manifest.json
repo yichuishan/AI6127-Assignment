@@ -1,0 +1,30 @@
+{
+  "schema": "summary_reference_drafts_v1",
+  "records": 100,
+  "claims": 193,
+  "review_status_counts": {
+    "pending": 100
+  },
+  "human_approved_references": 0,
+  "priority_review_records": 19,
+  "word_count": {
+    "min": 12,
+    "median": 37.0,
+    "max": 85
+  },
+  "source_files_sha256": {
+    "experiments/steam_generation_eval.jsonl": "4c195f15f0d8082e6ba05940e57c7e15d699c16214ebd0b13efbf0944e84852a",
+    "data/generation_annotations/passages.jsonl": "74916f1a94ca17f3a56cb1a5770274dc5e3c9c807c356cd549440a7b257cd080",
+    "data/generation_annotations/query_annotations.jsonl": "d0e3bafd9480aa222f8048ca71694f09f57523c6e5416c0bc5182a1bc02ecec4"
+  },
+  "reference_drafts_sha256": "911438201dccc1b03ed9ed8a7633cabd114490331e12607974bd8fe149f86ff5",
+  "drafting_procedure": "Assistant-written from original fixed review evidence and existing query-specific scope annotations; no A/B/C/D generation output used.",
+  "model_api_calls": 0,
+  "automated_checks": [
+    "100 unique query IDs",
+    "every cited review appears in the corresponding fixed context",
+    "all source quotes and offsets match",
+    "all references pending and excluded from confirmed-reference export"
+  ],
+  "score_status": "ROUGE has not been computed; these drafts are not confirmed gold references."
+}
