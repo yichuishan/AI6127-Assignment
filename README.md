@@ -4,6 +4,8 @@ Final experiment code for comparing four RAG summarization methods with fixed re
 
 Requires **Python 3.10+**. The project uses only the Python standard library; no evaluator model or third-party Python packages are required.
 
+Unless stated otherwise, run commands from the directory containing this README. In the group repository, that directory is `code/generation/rag_summary/`. The integration examples below explicitly run from `code/`.
+
 ## Run the Web Interface
 
 ```bash
@@ -42,6 +44,165 @@ result = generate_summary(
 ```
 
 Each entry in `ranked_passages` requires `chunk_id` and `text`, with optional `game_name` and `source_url` fields inside `metadata`. For structured experiments, the runner adds eight aspect candidates per review without presence or sentiment labels. Reference answers and human sentiment labels are excluded from model inputs.
+
+## Connect to the Group Retriever
+
+The group repository documents the handoff in [code/generation/README.md](https://github.com/GSrihariS/RAG_ASPA_Game_Retrieval/blob/main/code/generation/README.md). This module lives at `code/generation/rag_summary/`, alongside the separate aspect-based sentiment analysis module. The summarizer's callable is `generate_summary(query, hits)`; no `generation.answer` wrapper is required. Sentiment analysis can run separately on the same hits.
+
+Run the following integration examples from the group repository's **`code/` directory**. They use the existing retriever dependencies; the summarizer itself adds no Python packages.
+
+### Input and Output Contract
+
+Pass the original user question and the final ranked `hits` list from `app.py` directly to the summarizer. Use the same list displayed as the top review results.
+
+| Retriever field | Use in summarization |
+|---|---|
+| Original `query` | The question to answer; use this rather than the expanded retrieval query |
+| `hits[*].chunk_id` | Required; retained as the original citation ID |
+| `hits[*].text` | Required; the review evidence used to generate claims |
+| `hits[*].metadata.game_name` | Optional; identifies the game discussed by the passage |
+| `hits[*].metadata.source_url` | Optional; retained as the review link in the output citations |
+| List order | Preserved when building the context; duplicate passage IDs are removed |
+| Scores, ranks, `retrieved_by`, and other metadata | Not included in the model context |
+
+`metadata.document_id`, `metadata.source`, and `metadata.title` can remain in each hit. The summarizer reads only the fields listed above. If a source URL is absent, citations still retain the original chunk ID.
+
+The return value includes:
+
+- `summary`: the answer with inline `[chunk_id]` citations.
+- `claims`: the retained claim text, supporting `chunk_ids`, and evidence quotes for B/C/D.
+- `citations`: unique cited `chunk_id` values and their available `source_url` values.
+- `status`: `ok`, `abstained`, or `no_evidence`.
+- `usage`, `latency_seconds`, `stage_calls`, and `claim_audit`: generation usage and verification records.
+
+For live retrieval, omit `fact_candidates`. Original chunk IDs provide citations for any retrieved review. The fixed-benchmark runner supplies its own fact catalog when running the structured evaluation.
+
+### API Configuration
+
+Set these environment variables in the shell or hosting environment before starting the group app:
+
+| Variable | Value |
+|---|---|
+| `GENERATION_API_KEY` | Your generation provider's API key |
+| `GENERATION_BASE_URL` | For example, `https://api.deepseek.com` |
+| `GENERATION_MODEL` | For example, `deepseek-v4-pro` |
+
+Keep the key local. It is read from the environment and is not part of the retriever output or generated result files.
+
+### Add Summarization to the Streamlit App
+
+In `code/app.py`, replace the contents of the **"Sentiment analysis / generated answer"** placeholder with the following block. Keep the separate sentiment-analysis module's integration alongside it. The app already defines `query`, `hits`, `json`, and `st`.
+
+```python
+import os
+
+from paths import GENERATION_RESULTS_DIR
+from generation.rag_summary.rag_generator import (
+    GenerationError,
+    OpenAICompatibleClient,
+    generate_summary,
+    safe_error,
+)
+
+st.markdown("**Evidence-grounded review summary**")
+evidence_key = (query, tuple((h["chunk_id"], h["text"]) for h in hits))
+
+if st.button("Generate summary", key="rag_summary_generate"):
+    try:
+        with st.spinner("Generating an answer from the retrieved reviews..."):
+            result = generate_summary(
+                query,
+                hits,
+                approach="improved",
+                model=os.getenv("GENERATION_MODEL", "deepseek-v4-pro"),
+                client=OpenAICompatibleClient(
+                    base_url=os.getenv("GENERATION_BASE_URL", "https://api.deepseek.com")
+                ),
+                max_claims=4,
+            )
+        st.session_state["rag_summary_answer"] = (evidence_key, result)
+        output_dir = GENERATION_RESULTS_DIR / "rag_summary"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "latest_answer.json").write_text(
+            json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except GenerationError as error:
+        st.error(safe_error(error)["error_message"])
+
+saved = st.session_state.get("rag_summary_answer")
+if saved is not None and saved[0] == evidence_key:
+    result = saved[1]
+    st.markdown(result["summary"])
+    for citation in result["citations"]:
+        if citation["source_url"]:
+            st.link_button(citation["chunk_id"], citation["source_url"])
+    st.download_button(
+        "Download generated answer",
+        json.dumps(result, ensure_ascii=False, indent=2),
+        file_name="rag_summary.json",
+        mime="application/json",
+        key="rag_summary_download",
+    )
+```
+
+Start the existing group interface from `code/`:
+
+```bash
+streamlit run app.py
+```
+
+Search as usual, then click **Generate summary**. The button controls model calls; Streamlit reruns reuse the stored answer for the same question and evidence. Results are saved through `paths.py` to `data/generation_results/rag_summary/latest_answer.json`.
+
+### Use a Downloaded Retrieval Export
+
+The group interface's **Download results (JSON)** button produces a `search_results.json` object containing `query` and `results`. The generator accepts this export directly; `mode`, `filters`, `params`, `expansion`, and `timings_ms` require no conversion.
+
+Save the export as `data/retrieval_results/search_results.json`. After setting the environment variables above, run from `code/`:
+
+```bash
+python -c "from paths import GENERATION_RESULTS_DIR; (GENERATION_RESULTS_DIR / 'rag_summary').mkdir(parents=True, exist_ok=True)"
+python generation/rag_summary/rag_generator.py ../data/retrieval_results/search_results.json --approach improved --max-claims 4 --output ../data/generation_results/rag_summary/answer.json
+```
+
+For programmatic loading, use:
+
+```python
+from generation.rag_summary.rag_generator import load_retrieval
+from paths import RETRIEVAL_RESULTS_DIR
+
+query, hits = load_retrieval(RETRIEVAL_RESULTS_DIR / "search_results.json")
+```
+
+### Retrieve Without the UI
+
+Use the group's fusion and reranking methods to obtain the ranked list:
+
+```python
+from retrieval.hybrid_retriever import HybridRetriever
+from retrieval.query_expansion import expand_query
+from retrieval.reranker import Reranker
+
+query = "How is the soundtrack in Hollow Knight?"
+expansion = expand_query(query, mode="hierarchical")
+fused = HybridRetriever().retrieve_fused(
+    query,
+    top_k=30,
+    candidates=20,
+    filters={"game_name": ["Hollow Knight"]},
+    sparse_query=expansion.sparse,
+    dense_query=expansion.dense,
+)
+hits = Reranker().rerank(query, fused, top_k=5)
+# Pass query and hits to generate_summary as in the Streamlit example.
+```
+
+`HybridRetriever.retrieve()` returns separate sparse and dense lists. `retrieve_fused()` and `Reranker.rerank()` produce the ranked list consumed by the summarizer.
+
+### Live Answers and Benchmark Evaluation
+
+The integration above generates answers from the current retrieval results. The experiment web interface launched by `launch_web.py` runs the fixed 100-question benchmark with its saved evidence and reference sets. Its upload option accepts unchanged benchmark subsets. New questions or different retrieved passages require corresponding references before fact-selection metrics can be computed.
+
+The module's bundled benchmark data and final experiment results remain inside `rag_summary/` for reproduction. Live group-app outputs use the shared `GENERATION_RESULTS_DIR` path shown above.
 
 ## Command-line Experiments
 
