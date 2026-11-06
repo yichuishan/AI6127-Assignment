@@ -3,11 +3,9 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
 
-from annotate_generation_facts import ASPECTS
 from rag_generator import generate_summary
-from run_fact_experiments import BENCHMARK,ANNOTATIONS,jsonl,benchmark,catalog,run
+from run_fact_experiments import ASPECTS,BENCHMARK,ANNOTATIONS,jsonl,benchmark,catalog,run
 from evaluate_fact_selection import score_selection
 
 
@@ -38,14 +36,13 @@ class FactExperimentTests(unittest.TestCase):
         model=FactModel()
         generate_summary(self.case['query'],self.case['results'],approach='improved',client=model,fact_candidates=candidates)
         payload=json.loads(model.calls[0][1]['content'])
-        for forbidden in ('reference_fact_ids','context_fact_ids','coverage_units','contrast_groups','human_annotation','target_sentiment'):
+        for forbidden in ('reference_fact_ids','context_fact_ids','coverage_units','contrast_groups','human_annotation','target_sentiment','human_decisions','optional_fact_ids','explicit_excluded_fact_ids'):
             self.assertNotIn(forbidden,payload)
         self.assertIn('ALL EIGHT',model.calls[0][0]['content'])
     def test_objective_scores_are_reproducible_and_drafts_shared(self):
         with tempfile.TemporaryDirectory() as tmp:
             model=FactModel()
-            with patch('evaluate_generation.judge_result',side_effect=AssertionError('Evaluator must not run')):
-                rows=run([self.case],Path(tmp)/'results',client=model,model='scripted')
+            rows=run([self.case],Path(tmp)/'results',client=model,model='scripted')
             self.assertEqual(len(rows),4)
             self.assertTrue(all(r['status']=='completed' for r in rows))
             self.assertEqual(len(model.calls),4) # two drafts and two self-verifications

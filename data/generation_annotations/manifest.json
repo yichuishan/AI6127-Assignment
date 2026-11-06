@@ -1,0 +1,22 @@
+{
+  "version": "human_review_v1",
+  "source_repository": "GSrihariS/RAG_ASPA_Game_Retrieval",
+  "source_commit": "34e8675a6af11e6871119d2de264a2487ba9b7b5",
+  "source_files": {
+    "steam_annotations_confirmed.json": "f81d19e01a544b772f79e014843b3de814a06f3e82be86a22cb26060d3085af3",
+    "queries.jsonl": "9faea7e46e65134201bb81dfe5a8b088b62bcf756bdbee7c01cba3f9c9b6780a",
+    "steam_generation_eval.jsonl": "e332dee5886a0b062f4f80c1e81b4ccd8735637f4321688cfa851ccd92d72f0a"
+  },
+  "reference_method": "aspect_label_targets_with_40_query_specific_user_adjudications",
+  "uses_llm_api": false,
+  "human_review_file": "human_review.json",
+  "original_conversion_sha256": "204033ac1eac07a0dac9d592c0d8202cf7198884fb0ccdae34fbd558882b2b37",
+  "artifact_sha256": {
+    "facts.jsonl": "d1a140496763d06ac77c6fc565ac651e68df95b630620985637447746844edb5",
+    "passages.jsonl": "74916f1a94ca17f3a56cb1a5770274dc5e3c9c807c356cd549440a7b257cd080",
+    "query_annotations.jsonl": "d0e3bafd9480aa222f8048ca71694f09f57523c6e5416c0bc5182a1bc02ecec4",
+    "human_review.json": "e57a86df6240b8b97d3fb6725ca751223a154fdff8d95c1da43b7ab81c76b1c2",
+    "statistics.json": "25d9e10791b0376374fd68c7ae66025d030809637e8894092e6a86c0ca20c91e"
+  },
+  "generation_input_sha256": "4c195f15f0d8082e6ba05940e57c7e15d699c16214ebd0b13efbf0944e84852a"
+}

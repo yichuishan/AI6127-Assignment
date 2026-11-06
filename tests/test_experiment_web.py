@@ -122,7 +122,9 @@ class WebTests(unittest.TestCase):
         self.assertEqual(instances[0]['timeout'],90)
         self.assertEqual(state['scored'],4)
         manifest=json.loads((self.app.jobs[job['id']].directory/'results/manifest.json').read_text())
-        self.assertEqual(manifest['evaluation_method'],'exact_fact_id_matching_v1')
+        self.assertEqual(manifest['evaluation_method'],'exact_fact_id_matching_human_review_v1')
+        self.assertEqual(manifest['reference_version'],'human_review_v1')
+        self.assertIn('human_review_hash',manifest)
         self.assertFalse(any(k.startswith('judge_') for k in manifest))
         cfg=self.config();cfg['judge_model']='qwen3.8-max'
         with self.assertRaises(urllib.error.HTTPError) as error:self.post('/api/jobs',cfg)

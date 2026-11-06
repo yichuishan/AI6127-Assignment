@@ -5,3 +5,6 @@ __pycache__/
 
 # Private web experiment outputs (never commit credentials or user uploads).
 experiments/web_runs/
+
+# Local CLI runs; report artifacts in experiments/final/ are tracked.
+experiments/runs/

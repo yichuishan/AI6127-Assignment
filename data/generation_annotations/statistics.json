@@ -24,14 +24,19 @@
     "exact": 2492,
     "missing": 406
   },
-  "condition_candidates": 409,
-  "condition_candidates_linked_to_fact": 185,
-  "contrast_candidates": 39,
-  "required_contrast_groups": 25,
-  "queries_with_required_contrasts": 22,
-  "coverage_units": 227,
+  "coverage_units": 238,
+  "reference_version": "human_review_v1",
+  "reviewed_query_fact_pairs": 40,
+  "reviewed_queries": 16,
+  "human_decision_counts": {
+    "A": 22,
+    "B": 7,
+    "C": 11
+  },
+  "reference_query_fact_pairs": 591,
+  "required_contrast_groups": 27,
+  "queries_with_required_contrasts": 24,
   "queries_without_reference_facts": [
     "hybrid_rerank/q76"
-  ],
-  "new_labels_human_reviewed": false
+  ]
 }

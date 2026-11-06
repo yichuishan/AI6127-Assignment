@@ -1,0 +1,8 @@
+{
+  "reference_version": "human_review_v1",
+  "uses_model": false,
+  "source": "generation_results.json",
+  "reference_sha256": "d0e3bafd9480aa222f8048ca71694f09f57523c6e5416c0bc5182a1bc02ecec4",
+  "human_review_sha256": "e57a86df6240b8b97d3fb6725ca751223a154fdff8d95c1da43b7ab81c76b1c2",
+  "scorer_sha256": "72c3b15f768f1e613ce471a1ea2265dc563dc1cd7dd18018010e4db2eb06bd85"
+}

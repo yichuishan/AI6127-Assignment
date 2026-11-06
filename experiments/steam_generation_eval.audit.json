@@ -9,6 +9,6 @@
     "data/steam_annotations_confirmed.json": "f81d19e01a544b772f79e014843b3de814a06f3e82be86a22cb26060d3085af3",
     "chunks.jsonl": "6e177b9906f9294daa51cf50d3d5a1a11903e0eef346122eb991cb5f49cdb560"
   },
-  "independent_annotator_agreement": null,
-  "note": "Confirmed status does not establish inter-annotator agreement. Add human references/key_points; never fabricate them."
+  "note": "Fixed generation contexts from saved annotated hybrid-rerank rankings; final scoring references are in data/generation_annotations.",
+  "generation_input_sha256": "4c195f15f0d8082e6ba05940e57c7e15d699c16214ebd0b13efbf0944e84852a"
 }
