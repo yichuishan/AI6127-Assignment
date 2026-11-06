@@ -5,7 +5,6 @@ import unittest
 from unittest.mock import patch
 
 from rag_generator import generate_summary, build_context, load_retrieval, GenerationError, OpenAICompatibleClient
-from evaluate_generation import evaluate, judge_result
 
 FIXTURE = Path(__file__).parent / 'fixtures/retrieval_export.json'
 
@@ -76,21 +75,11 @@ class GenerationTests(unittest.TestCase):
         with self.assertRaises(GenerationError):
             generate_summary(self.query, self.hits, client=FakeClient(raw='not json'))
 
-    def test_cost_and_paired_evaluation(self):
-        result = evaluate([{'query': self.query, 'results': self.hits}], client=FakeClient(), input_price=1, output_price=2)
-        self.assertEqual(len(result['rows']), 4)
-        self.assertAlmostEqual(result['rows'][0]['result']['estimated_cost_usd'], .00018)
-        self.assertIsNone(result['aggregates']['baseline']['judge_scores'])
-        self.assertEqual(result['rows'][0]['reference_metrics'], {})
-
-    def test_judge_validation(self):
-        result = generate_summary(self.query, self.hits, client=FakeClient())
-        payload = {'faithfulness': {'score': 4, 'reason': 'Test-only judgment'}, 'relevance': {'score': 3, 'reason': 'Test-only judgment'}}
-        judge = judge_result(self.query, result, self.hits, FakeClient(raw=json.dumps(payload)), 'mock-judge')
-        self.assertEqual(judge['scores']['faithfulness']['score'], 4)
-        payload['faithfulness']['score'] = 6
-        with self.assertRaises(GenerationError):
-            judge_result(self.query, result, self.hits, FakeClient(raw=json.dumps(payload)), 'mock-judge')
+    def test_generation_usage_and_cost(self):
+        result = generate_summary(self.query, self.hits, approach='baseline', client=FakeClient(),
+                                  input_cost_per_million=1, output_cost_per_million=2)
+        self.assertEqual(result['usage'], {'prompt_tokens': 100, 'completion_tokens': 40})
+        self.assertAlmostEqual(result['estimated_cost_usd'], .00018)
 
     def test_transport_response(self):
         from io import BytesIO

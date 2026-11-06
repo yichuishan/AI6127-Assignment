@@ -3,7 +3,7 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Evidence Lab · 结构化事实实验</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
 <body><div class="shell">
 <aside><a class="brand" href="/">e<span>·</span>lab</a><div class="project">AI6127 / GENERATION</div><nav><a class="active" href="#workspace">◉　实验工作台</a><a href="#results">▤　算法评分与结果</a><a href="#notes">↗　指标说明</a></nav><div class="aside-foot"><span class="dot"></span> 事实 ID 匹配评测<br><small>不调用独立评测模型</small></div></aside>
-<main id="workspace"><header><div class="eyebrow">STRUCTURED FACT SELECTION</div><div class="headline"><div><h1>生成总结，用事实 ID 比较。</h1><p>同一批评论、同一套标签，程序计算选择准确率与覆盖率。</p></div><span class="badge">算法评测 <b>02</b></span></div></header>
+<main id="workspace"><header><div class="eyebrow">STRUCTURED FACT SELECTION</div><div class="headline"><div><h1>生成总结，用事实 ID 比较。</h1><p>同一批评论、同一套标签，程序计算选择准确率与覆盖率。</p></div><span class="badge">人工复核参考集 <b>03</b></span></div></header>
 <div class="dataset-banner"><div class="dataset-icon">▦</div><div><strong>Steam 结构化事实基准</strong><p id="dataset-info">正在读取测试输入…</p></div><span class="pill">无评测模型</span></div>
 <div id="alert" role="alert" hidden></div><div class="grid">
 <section class="panel config"><div class="section-head"><span class="step">01</span><h2>配置生成模型</h2></div>
@@ -31,5 +31,5 @@
 <div class="monitor-actions"><button id="stop" disabled>停止实验</button><a id="download" class="download disabled" aria-disabled="true">下载结果 ZIP ↓</a></div><p class="hint">停止在当前 API 请求结束后生效。关闭网页不会停止任务，同一浏览器返回可继续查看。</p></section>
 <section class="panel" id="aggregate-panel" hidden><div class="section-head"><span class="step">03</span><h2>算法评分汇总</h2></div><div class="table-scroll"><table class="score-table"><thead><tr><th>方法</th><th>P</th><th>R</th><th>F1</th><th>单元覆盖</th><th>正负覆盖</th></tr></thead><tbody id="aggregates"></tbody></table></div><p class="hint">均值和有效样本数见下载 CSV；无适用参考或分歧时显示 —。</p></section>
 <section class="panel activity"><div class="section-head"><span class="step">04</span><h2>实时总结与评分</h2><span class="muted">最近 30 项</span></div><div id="events" aria-live="polite"><div class="empty"><div>⌁</div><strong>等待第一份结构化总结</strong><p>每项完成后显示事实 ID、算法分数与总结。</p></div></div></section>
-<section class="notes" id="notes"><h3>本页如何评分</h3><p>P/R/F1 按选中事实 ID 与参考集合匹配。覆盖单元把同游戏、同方面、同情感的重复事实合并；正负覆盖检查适用组是否同时选中双方事实。</p><p>模型为每条可见评论看到全部八个方面槽位，包含未提及方面；候选列表不泄漏人工标签。总结保留的观点合并为 selected_fact_ids 后评分。</p><p>这些数值评估标签级事实选择，不直接验证自由文本语义。条件仍为待复核候选，本页不报告条件保留率。旧版模型评分实验可继续通过原 CLI 复现，不与本页混合。</p><p id="source-status">正在读取数据来源…</p></section>
+<section class="notes" id="notes"><h3>本页如何评分</h3><p>P/R/F1 按选中事实 ID 与人工复核后的参考集合匹配。核心信息计入覆盖要求；可选补充不强制覆盖，也不按误选扣分；排除信息选中时扣分。覆盖单元把同游戏、同方面、同情感的重复事实合并；正负覆盖检查适用组是否同时选中双方事实。</p><p>模型为每条可见评论看到全部八个方面槽位，包含未提及方面；候选列表不泄漏人工标签。总结保留的观点合并为 selected_fact_ids 后评分。</p><p>这些数值评估标签级事实选择，不直接验证自由文本语义。条件保留率尚无对应人工标注，不计分。</p><p id="source-status">正在读取数据来源…</p></section>
 </div></div><footer>Evidence Lab <span>·</span> Structured Fact Experiments <span>·</span> 确定性评分，无独立评测模型</footer></main></div></body></html>

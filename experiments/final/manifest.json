@@ -1,0 +1,46 @@
+{
+  "reference_version": "human_review_v1",
+  "source_zip_sha256": "dfeab310b85f0d728a117eb635942e4967eba380042ceee23b1a8eb696ff6d0a",
+  "generation_configuration": {
+    "base_url": "https://api.deepseek.com",
+    "max_output_tokens": 8192,
+    "thinking": "auto",
+    "timeout": 180,
+    "input_price": null,
+    "output_price": null,
+    "evaluation_method": "exact_fact_id_matching_v1",
+    "model": "deepseek-v4-pro",
+    "approaches": [
+      "baseline",
+      "improved",
+      "verify_delete",
+      "verify_revise"
+    ],
+    "repeats": 1,
+    "max_claims": 4,
+    "seed": 42,
+    "candidate_catalog": "all_eight_aspects_for_each_visible_review",
+    "reference_labels_in_prompt": false,
+    "context_limits": {
+      "max_context_chars": 24000,
+      "max_chunk_chars": 4000
+    },
+    "prompt_hashes": {
+      "baseline.txt": "b839f86890c1db5cd6d7478bfaf21fbf70fe89fc18e726ba51d221fb5acfdaa1",
+      "fact_selection.txt": "daaceeebfbc66f299fb4659f4d1161e2994df0351fab3e638b89b560d7974a72",
+      "improved.txt": "e0822a956b39d1a2122ef550a4557ba3ef66a82f9d60c39952102504ccffbec2",
+      "revise.txt": "1a327db7e0cf5fa0ad361b68d7ad04b3db35f2a0c2e946071e0f9f8a3f1bbb2c",
+      "verify.txt": "5f14262b3d5e97a564d33134394138bb4e4836c062fb85568fe49564af348b5e"
+    },
+    "data_hash": "5e1d37808f5cb8ef470049e193fd1119037f28a47e2d16903b9f3691898033d0",
+    "code_hashes": {
+      "rag_generator.py": "92cce1251405cc7a7f95ee8c5c96df88691fce7e3e810d618d56c0c720f9bd79",
+      "run_fact_experiments.py": "8e208a1d1ae36318c4685a63241e90e20d60d820f71bb04f53405ca9c22ad429",
+      "evaluate_fact_selection.py": "750f673a3720732e76c6b22a027ef87756f0d3b5c22e14cd99e996144f2e7e18"
+    },
+    "passage_mapping_hash": "3d9f58ffa8409fdb00b6775d55768e82ef3b3c21f8c057fec3885877ea513304",
+    "annotation_hash": "04a6e295210cb872339f6e3ba0bb35113b9306828bf06d6a6bebcb3a25dd5647"
+  },
+  "scoring_reference_sha256": "d0e3bafd9480aa222f8048ca71694f09f57523c6e5416c0bc5182a1bc02ecec4",
+  "description": "Archived generation outputs rescored with the final user-adjudicated reference sets."
+}

@@ -3,7 +3,6 @@ import json
 import unittest
 
 from rag_generator import generate_summary, GenerationError
-from evaluate_generation import evaluate, judge_result
 
 HITS = [
     {'chunk_id': 'r1', 'text': 'It runs smoothly on my PC, but crashes sometimes.',
@@ -117,25 +116,6 @@ class VerificationTests(unittest.TestCase):
         result = generate_summary('q', HITS, client=client, input_cost_per_million=1, output_cost_per_million=2)
         self.assertEqual(result['usage'], {})
         self.assertIsNone(result['estimated_cost_usd'])
-
-    def test_coverage_judge_schema(self):
-        payload = {'faithfulness': {'score': 4, 'reason': 'test'}, 'relevance': {'score': 4, 'reason': 'test'},
-                   'coverage': [{'covered': True, 'reason': 'test'}]}
-        scored = judge_result('q', {'summary': 'Example'}, HITS, ScriptedClient(payload), 'mock', ['Crashes are reported'])
-        self.assertTrue(scored['scores']['coverage'][0]['covered'])
-        payload['coverage'] = []
-        with self.assertRaises(GenerationError):
-            judge_result('q', {'summary': 'Example'}, HITS, ScriptedClient(payload), 'mock', ['Crashes'])
-
-    def test_ablation_aggregates_all_arms(self):
-        outputs = [{'claims': [BAD]}, {'claims': [BAD]}, {'claims': [BAD]}, verdict('unsupported'),
-                   {'claims': [BAD]}, verdict('partially_supported'), {'claim': FIXED}, verdict('supported')]
-        result = evaluate([{'query': 'performance?', 'results': HITS}], client=ScriptedClient(*outputs))
-        self.assertEqual(len(result['rows']), 4)
-        self.assertEqual(result['aggregates']['verify_delete']['original_claim_retention_rate'], 0)
-        self.assertEqual(result['aggregates']['verify_revise']['revised_claims'], 1)
-        self.assertEqual(result['aggregates']['verify_revise']['mean_model_calls'], 4)
-        self.assertIsNone(result['aggregates']['verify_revise']['key_point_coverage'])
 
 
 if __name__ == '__main__':

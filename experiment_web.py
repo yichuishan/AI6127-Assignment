@@ -15,6 +15,7 @@ import zipfile
 
 from rag_generator import APPROACHES, OpenAICompatibleClient, safe_error
 from run_fact_experiments import jsonl, run, benchmark, aggregate
+from evaluate_fact_selection import ANNOTATIONS, REFERENCE_VERSION
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DATASET = ROOT / 'experiments/steam_generation_eval.jsonl'
@@ -136,8 +137,6 @@ class Application:
         self.factory, self.jobs, self.sessions, self.lock = factory, {}, set(), threading.Lock()
 
     def start(self, owner, data):
-        if any(k.startswith('judge_') and v not in (None,'',[]) for k,v in data.items()):
-            raise ValueError('Evaluator models are not supported by this page; refresh the page')
         allowed={'api_key','base_url','model','repeats','max_output_tokens','timeout','thinking',
                  'max_claims','limit','approaches','input_price','output_price','dataset_jsonl'}
         if set(data)-allowed:raise ValueError('Unsupported experiment option')
@@ -224,8 +223,10 @@ def server(host='127.0.0.1', port=8080, application=None):
                 return self.send(401, {'error': '请先打开页面。'})
             if path == '/api/info':
                 cases = jsonl(DEFAULT_DATASET)
-                return self.send(200, {'cases': len(cases), 'fact_count':2898, 'evaluation_method':'exact_fact_id_matching_v1',
-                    'dataset_status': '已验证网站及标注接口 HTTP 200；1,000 条在线标注与指定 GitHub 版本完全一致（2026-11-04）。',
+                stats=json.loads((ANNOTATIONS/'statistics.json').read_text())
+                return self.send(200, {'cases': len(cases), 'fact_count':stats['facts'],
+                    'evaluation_method':'exact_fact_id_matching_human_review_v1','reference_version':REFERENCE_VERSION,
+                    'dataset_status': '基于 1,000 条标注评论与 100 个固定问题；已应用 40 项人工复核：22 项核心、7 项可选补充、11 项排除。',
                     'dataset_access': json.loads((ROOT/'experiments/dataset_access.json').read_text()) if (ROOT/'experiments/dataset_access.json').exists() else None,
                     'jobs': [j.snapshot() for j in app.jobs.values() if j.owner == owner]})
             parts = path.strip('/').split('/')

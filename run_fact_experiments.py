@@ -9,13 +9,12 @@ import random
 import statistics
 import time
 
-from annotate_generation_facts import ASPECTS
-from evaluate_fact_selection import score_selection
+from evaluate_fact_selection import ANNOTATIONS, REFERENCE_VERSION, paired_comparisons, score_selection
 from rag_generator import APPROACHES, PROMPTS, OpenAICompatibleClient, build_context, generate_summary, safe_error
 
 ROOT=Path(__file__).resolve().parent
 BENCHMARK=ROOT/'experiments/steam_generation_eval.jsonl'
-ANNOTATIONS=ROOT/'data/generation_annotations/v1'
+ASPECTS=('story','graphics_visuals','gameplay','controls','performance','audio','bugs_stability','online_multiplayer')
 
 
 def jsonl(path):
@@ -82,19 +81,22 @@ def aggregate(rows):
 
 def export(out,rows):
     table=aggregate(rows)
+    paired=paired_comparisons(rows)
     dump(out/'generation_results.json',rows)
-    dump(out/'report_data.json',{'evaluation_method':'exact_fact_id_matching_v1','aggregates':table,
-        'scope':'Label-level structured selection, not free-text entailment. Conditions remain unreviewed.'})
+    dump(out/'report_data.json',{'evaluation_method':'exact_fact_id_matching_human_review_v1',
+        'reference_version':REFERENCE_VERSION,'aggregates':table,'paired_comparisons':paired,
+        'scope':'Required/optional/excluded review-aspect selection. Condition retention is not scored.'})
     fields=sorted({k for r in table for k in r})
     with (out/'summary.csv').open('w',newline='',encoding='utf-8') as f:
-        writer=csv.DictWriter(f,fieldnames=fields);writer.writeheader();writer.writerows(table)
+        writer=csv.DictWriter(f,fieldnames=fields,lineterminator='\n');writer.writeheader();writer.writerows(table)
     predictions=[{'id':r['case_id'],'approach':r['approach'],'repeat':r['repeat'],
         'selected_fact_ids':r['result']['selected_fact_ids'],'summary':r['result']['summary']} for r in rows if r['status']=='completed']
     (out/'predictions.jsonl').write_text(''.join(json.dumps(p,ensure_ascii=False)+'\n' for p in predictions),encoding='utf-8')
     lines=['# Structured fact selection results','','Scoring uses exact ID matching; no evaluator model is called.',
         'All eight aspect slots per review are visible to generation; gold labels and reference sets are not.',
         'P/R/F1 concern review-aspect selection. Natural-language summary entailment is not scored.',
-        'Condition candidates are unreviewed; condition retention remains unavailable.',
+        'References include 40 query-specific human decisions. Optional background is not required or penalized.',
+        'Condition retention has not been annotated and is not scored.',
         'C/D self-verification uses the generator model and is part of generation, not the final scorer.','',
         '| Method | Completed | Failed | Precision | Recall | F1 | Unit recall | Contrast coverage | Latency s |',
         '|---|---:|---:|---:|---:|---:|---:|---:|---:|']
@@ -102,6 +104,12 @@ def export(out,rows):
         lines.append('| '+' | '.join(str(r.get(k,'N/A')) for k in ('approach','completed','failed','fact_selection_precision','fact_selection_recall','fact_selection_f1','coverage_unit_recall','polarity_contrast_coverage','latency_seconds'))+' |')
     lines.extend(['','All metric means disclose valid counts in summary.csv. Failed tasks are listed separately.',
         'B/C/D share a draft; logical latency, usage and cost include one draft per arm.'])
+    lines.extend(['','## Paired F1 comparisons','','| After - before | Queries | Delta (pp) | Bootstrap 95% CI (pp) |',
+                  '|---|---:|---:|---:|'])
+    for p in paired:
+        if p['metric']=='fact_selection_f1':
+            lo,hi=p['bootstrap_95_percent_CI']
+            lines.append(f"| {p['after']} - {p['before']} | {p['n']} | {100*p['mean_delta']:.3f} | [{100*lo:.3f}, {100*hi:.3f}] |")
     (out/'report.md').write_text('\n'.join(lines)+'\n',encoding='utf-8')
     return table
 
@@ -112,7 +120,8 @@ def run(cases,out,*,client,model,approaches=APPROACHES,repeats=1,max_claims=4,se
     out=Path(out)
     if out.exists() and any(out.iterdir()):raise ValueError('Use a new output directory')
     out.mkdir(parents=True,exist_ok=True)
-    manifest=dict(config or {},evaluation_method='exact_fact_id_matching_v1',model=model,
+    manifest=dict(config or {},evaluation_method='exact_fact_id_matching_human_review_v1',
+        reference_version=REFERENCE_VERSION,model=model,
         approaches=list(approaches),repeats=repeats,max_claims=max_claims,seed=seed,
         candidate_catalog='all_eight_aspects_for_each_visible_review',reference_labels_in_prompt=False,
         context_limits={'max_context_chars':24000,'max_chunk_chars':4000},
@@ -120,7 +129,8 @@ def run(cases,out,*,client,model,approaches=APPROACHES,repeats=1,max_claims=4,se
         data_hash=hashlib.sha256(json.dumps(cases,sort_keys=True,ensure_ascii=False).encode()).hexdigest(),
         code_hashes={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in ('rag_generator.py','run_fact_experiments.py','evaluate_fact_selection.py')},
         passage_mapping_hash=hashlib.sha256((ANNOTATIONS/'passages.jsonl').read_bytes()).hexdigest(),
-        annotation_hash=hashlib.sha256((ANNOTATIONS/'query_annotations.jsonl').read_bytes()).hexdigest())
+        annotation_hash=hashlib.sha256((ANNOTATIONS/'query_annotations.jsonl').read_bytes()).hexdigest(),
+        human_review_hash=hashlib.sha256((ANNOTATIONS/'human_review.json').read_bytes()).hexdigest())
     dump(out/'manifest.json',manifest)
     write=''.join(json.dumps(references[c['id']],ensure_ascii=False)+'\n' for c in cases)
     (out/'evaluation_references.jsonl').write_text(write,encoding='utf-8')
