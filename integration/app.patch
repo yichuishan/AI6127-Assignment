@@ -1,0 +1,79 @@
+diff --git a/code/app.py b/code/app.py
+index 4df4f4b..d4de90c 100644
+--- a/code/app.py
++++ b/code/app.py
+@@ -1,11 +1,15 @@
+ import json
++import os
+ import time
+ from collections import Counter
+ from datetime import datetime
+ 
+ import streamlit as st
+ 
+-from paths import QUERIES_PATH
++from generation.rag_summary.rag_generator import (
++    GenerationError, OpenAICompatibleClient, generate_summary, safe_error,
++)
++from paths import GENERATION_RESULTS_DIR, QUERIES_PATH
+ from retrieval.fusion import RRF_K, merge, reciprocal_rank_fusion
+ from retrieval.hybrid_retriever import HybridRetriever
+ from retrieval.query_expansion import expand_query
+@@ -149,6 +153,48 @@ def render_hit(rank, hit, mode):
+             st.json({'chunk_id': hit['chunk_id'], **meta})
+ 
+ 
++def render_summary(query, hits):
++    evidence_key = (query, tuple(
++        (h['chunk_id'], h['text'], (h.get('metadata') or {}).get('game_name'),
++         (h.get('metadata') or {}).get('source_url')) for h in hits
++    ))
++    if st.button('Generate summary', key='rag_summary_generate'):
++        st.session_state.pop('rag_summary_answer', None)
++        try:
++            with st.spinner('Generating an answer from the retrieved reviews...'):
++                result = generate_summary(
++                    query, hits, approach='improved', max_claims=4,
++                    model=os.getenv('GENERATION_MODEL', 'deepseek-v4-pro'),
++                    client=OpenAICompatibleClient(
++                        base_url=os.getenv('GENERATION_BASE_URL', 'https://api.deepseek.com')
++                    ),
++                )
++        except (GenerationError, ValueError) as error:
++            st.error(safe_error(error)['error_message'])
++        else:
++            st.session_state.rag_summary_answer = (evidence_key, result)
++            try:
++                output_dir = GENERATION_RESULTS_DIR / 'rag_summary'
++                output_dir.mkdir(parents=True, exist_ok=True)
++                (output_dir / 'latest_answer.json').write_text(
++                    json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8'
++                )
++            except OSError:
++                st.warning('Could not save the answer locally. Use the download button below.')
++
++    saved = st.session_state.get('rag_summary_answer')
++    if saved is not None and saved[0] == evidence_key:
++        result = saved[1]
++        st.markdown(result['summary'])
++        for citation in result['citations']:
++            if citation['source_url']:
++                st.link_button(citation['chunk_id'], citation['source_url'])
++        st.download_button(
++            'Download generated answer', json.dumps(result, ensure_ascii=False, indent=2),
++            file_name='rag_summary.json', mime='application/json', key='rag_summary_download',
++        )
++
++
+ def main():
+     retriever = load_retriever()
+     games_all = game_names(retriever)
+@@ -214,7 +260,7 @@ def main():
+     render_stats(hits)
+     with st.container(border=True):
+         st.markdown('**Sentiment analysis / generated answer**')
+-        st.caption('Placeholder: the downstream generation and aspect-based sentiment module will be shown here.')
++        render_summary(query, hits)
+ 
+     st.subheader(f'Top {len(hits)} reviews')
+     export = {
