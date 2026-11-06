@@ -1,33 +1,33 @@
 # AI6127: Evidence-grounded Review Summarization
 
-最终实验代码：固定检索证据，比较四种 RAG 总结方法，并使用人工复核后的事实 ID 参考集合进行算法评测。
+Final experiment code for comparing four RAG summarization methods with fixed retrieved evidence and deterministic fact-ID evaluation against references refined through human review.
 
-需要 **Python 3.10+**。全部使用标准库，无须安装评测模型或第三方 Python 包。
+Requires **Python 3.10+**. The project uses only the Python standard library; no evaluator model or third-party Python packages are required.
 
-## 网页运行
+## Run the Web Interface
 
 ```bash
 python launch_web.py
 ```
 
-浏览器打开后填写生成模型的 API 地址、模型名称和 API Key，设置问题数量、重复次数及最多观点数，即可查看进度并下载结果 ZIP。
+Once the browser opens, enter the generation API URL, model name, and API key. Set the number of questions, repetitions, and maximum claims per answer, then start the experiment to view progress and download the results ZIP.
 
-默认配置为 `https://api.deepseek.com`、`deepseek-v4-pro`，自动关闭官方 DeepSeek V4 的思考模式。默认先运行 3 个问题；完整实验选择 100 个问题、重复 1 次、最多 4 条观点。
+The default settings are `https://api.deepseek.com` and `deepseek-v4-pro`, with thinking automatically disabled for the official DeepSeek V4 API. Start with the default three questions. For the full experiment, select 100 questions, one repetition, and at most four claims per answer.
 
-API Key 仅保存在进程内存中，不写入结果文件或浏览器存储。网页运行期间保留终端；按 Ctrl+C 停止服务。
+API keys remain in process memory and are excluded from result files and browser storage. Keep the terminal open while using the interface; press Ctrl+C to stop the server.
 
-## 四种生成方法
+## Generation Methods
 
-| 方法 | 流程 |
+| Method | Workflow |
 |---|---|
-| A · Baseline | 生成观点、来源引用及事实 ID |
-| B · Evidence quotes | 在 A 的基础上强化证据提示，要求并校验原文摘录 |
-| C · Verify-delete | 使用 B 的初稿，逐观点自检，删除未通过的观点 |
-| D · Verify-revise | 使用 B 的初稿，修订未通过的观点并再次核查 |
+| A · Baseline | Generate claims with source citations and fact IDs |
+| B · Evidence quotes | Strengthen the evidence instructions and require validated verbatim quotes |
+| C · Verify-delete | Start from B's draft, check each claim, and delete claims that fail verification |
+| D · Verify-revise | Start from B's draft, repair claims that fail verification, and check the revisions again |
 
-B/C/D 共用初始草稿。C/D 的自检使用生成模型；最终评分由同一个算法完成，不配置独立评测模型。
+B/C/D share the initial draft. C/D use the generation model for self-checking; final scoring uses the same deterministic algorithm for every method, with no separate evaluator model.
 
-生成接口位于 `rag_generator.py`：
+The generation interface is provided by `rag_generator.py`:
 
 ```python
 from rag_generator import generate_summary
@@ -41,87 +41,87 @@ result = generate_summary(
 )
 ```
 
-`ranked_passages` 中每项需要 `chunk_id`、`text`，可在 `metadata` 中提供 `game_name`、`source_url`。结构化实验由运行器添加每条评论的八个无标签方面候选；模型输入不包含参考答案或人工情感标签。
+Each entry in `ranked_passages` requires `chunk_id` and `text`, with optional `game_name` and `source_url` fields inside `metadata`. For structured experiments, the runner adds eight aspect candidates per review without presence or sentiment labels. Reference answers and human sentiment labels are excluded from model inputs.
 
-## 命令行实验
+## Command-line Experiments
 
-先在自己的终端设置 `GENERATION_API_KEY`，然后运行：
+Set `GENERATION_API_KEY` in your own terminal, then run:
 
 ```bash
 python run_fact_experiments.py --output experiments/runs/full --limit 100 --repeats 1 --max-claims 4 --base-url https://api.deepseek.com --model deepseek-v4-pro
 ```
 
-先试跑时把 `--limit 100` 改为 `--limit 3`。输出目录必须是新的空目录。
+For a trial run, replace `--limit 100` with `--limit 3`. Use a new, empty output directory.
 
-运行结果包含完整生成输出、逐任务记录、预测 ID、使用的参考集合、指标 CSV、汇总和配置哈希。
+Outputs include complete generation results, per-task checkpoints, predicted IDs, the reference sets used, CSV metrics, summaries, and configuration hashes.
 
-## 无 API 重算
+## Recompute Scores Without API Calls
 
-重新评分下载的实验 ZIP：
+Rescore a downloaded experiment ZIP:
 
 ```bash
 python recompute_results.py generation-experiment.zip --output experiments/runs/rescored
 ```
 
-复现报告所用结果，不需要密钥：
+Reproduce the report results without an API key:
 
 ```bash
 python recompute_results.py experiments/final/generation_results.json --output experiments/runs/report_reproduction
 ```
 
-仅对预测 JSONL 评分：
+Score a prediction JSONL file directly:
 
 ```bash
 python evaluate_fact_selection.py experiments/final/predictions.jsonl --output experiments/runs/prediction_metrics.json
 ```
 
-预测文件每行包含 `id`、`selected_fact_ids`，可附带 `approach`、`repeat`、`summary`。脚本使用仓库内的最终参考集合。
+Each prediction line contains `id` and `selected_fact_ids`, with optional `approach`, `repeat`, and `summary` fields. The scripts use the final reference sets included in this repository.
 
-## 数据和评分
+## Data and Scoring
 
-- `experiments/steam_generation_eval.jsonl`：100 个固定问题及每题至多十条已标注评论证据，来自保存的 `hybrid_rerank` 排名。
-- `data/generation_annotations/`：1,000 条原始标注评论、2,898 个评论—方面事实，以及最终参考集合。
-- `human_review.json`：40 项用户复核判断，涉及 16 个问题：22 项核心、7 项可选补充、11 项排除。
+- `experiments/steam_generation_eval.jsonl`: 100 fixed questions, each with up to ten annotated review passages from saved `hybrid_rerank` rankings.
+- `data/generation_annotations/`: 1,000 annotated source passages, 2,898 review–aspect facts, and the final reference sets.
+- `data/generation_annotations/human_review.json`: 40 user-adjudicated decisions across 16 questions, comprising 22 core facts, seven optional background facts, and 11 excluded facts.
 
-核心信息计入参考集合；可选补充不强制覆盖，也不按误选扣分；排除信息被选中时计为误选。未复核条目沿用原标注匹配规则。
+Core facts belong to the required reference set. Optional background facts are neither required for coverage nor penalized as incorrect selections. Excluded facts count as incorrect when selected. Items outside this review retain the original annotation-matching rules.
 
-指标包括事实选择 Precision/Recall/F1、覆盖单元召回率、正负分歧覆盖率，以及运行耗时、调用次数和 Token 用量。覆盖单元按游戏、方面、情感分组。最终参考集合有 591 个必需问题—事实对、238 个覆盖单元，以及 24 个问题中的 27 个正负分歧组。条件保留率尚无对应人工标注，不计分。
+Metrics include fact-selection Precision/Recall/F1, coverage-unit recall, polarity-contrast coverage, execution time, model calls, and token usage. Coverage units group facts by game, aspect, and sentiment. The final references contain 591 required query–fact pairs, 238 coverage units, and 27 positive/negative contrast groups across 24 questions. Condition retention is not scored because the corresponding human annotations are unavailable.
 
-这些指标评价结构化事实选择。详细来源、字段和规则见 [数据说明](data/generation_annotations/README.md)。网页仅接受原基准中问题和证据保持一致的子集。
+These metrics evaluate structured fact selection. See the [data documentation](data/generation_annotations/README.md) for sources, fields, and scoring rules. The web interface accepts subsets of the original benchmark with unchanged questions and evidence.
 
-## 最终实验结果
+## Final Experiment Results
 
-`experiments/final/` 保存报告所用的真实生成输出及复核后指标。得分均为按问题宏平均的百分比：
+`experiments/final/` contains the actual generation outputs and revised scores used in the report. Scores below are percentages macro-averaged across applicable questions:
 
-| 方法 | 精确率 | 召回率 | F1 | 单元覆盖 | 正负覆盖 |
+| Method | Precision | Recall | F1 | Unit recall | Contrast coverage |
 |---|---:|---:|---:|---:|---:|
 | A | 85.40 | 72.71 | 75.82 | 88.73 | 56.25 |
 | B | 88.03 | 69.68 | 75.12 | 87.18 | 50.00 |
 | C | 89.49 | 68.67 | 74.74 | 87.05 | 50.00 |
 | D | 89.20 | 69.58 | 75.23 | 87.05 | 50.00 |
 
-A/B 各完成 100 项，C/D 各完成 99 项。逐项输出、有效数量、Token 和时间见 [最终结果 CSV](experiments/final/summary.csv)。
+A/B each completed 100 tasks; C/D each completed 99. See the saved outputs and [final results CSV](experiments/final/summary.csv) for individual results, valid counts, token usage, and timing.
 
-## 文件结构
+## Repository Structure
 
 ```text
-rag_generator.py            生成、引用校验、自检与修订
-prompts/                    A/B 提示词、事实选择、自检及修订提示词
-run_fact_experiments.py      固定基准实验运行器
-experiment_web.py            网页后端、进度与 ZIP 导出
-launch_web.py                本地启动入口
-web/                         网页前端
-evaluate_fact_selection.py   统一算法评分器
-recompute_results.py         已保存输出的无 API 重算
-data/generation_annotations/ 最终数据与人工复核记录
-experiments/                 固定输入、来源审计和最终实验结果
-tests/                       生成、评分、网页及结果复现测试
+rag_generator.py            Generation, citation validation, self-checking, and revision
+prompts/                    A/B, fact-selection, verification, and revision prompts
+run_fact_experiments.py      Fixed-benchmark experiment runner
+experiment_web.py            Web backend, progress tracking, and ZIP export
+launch_web.py                Local launch entry point
+web/                        Web frontend
+evaluate_fact_selection.py  Shared deterministic scorer
+recompute_results.py        Offline rescoring of saved outputs
+data/generation_annotations/ Final data and human review records
+experiments/                Fixed inputs, source audit, and final results
+tests/                      Generation, scoring, web, and reproduction tests
 ```
 
-## 验证
+## Validation
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-测试使用模拟模型和已保存的最终输出，不调用付费 API。
+Tests use scripted models and saved final outputs; they do not call paid APIs.
