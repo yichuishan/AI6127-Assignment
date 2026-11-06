@@ -161,7 +161,34 @@ class AppGenerationTests(unittest.TestCase):
         self.assertEqual(payload['question'], 'How is the soundtrack?')
         self.assertEqual(payload['max_claims'], 4)
         self.assertNotIn('fact_candidates', payload)
-        self.assertEqual(set(payload['evidence'][0]), {'chunk_id', 'text', 'game_name', 'source_url'})
+        self.assertEqual(set(payload['evidence'][0]),
+                         {'chunk_id', 'text', 'game_name', 'source_url', 'evidence_scope'})
+
+    def test_latest_update_is_used_by_live_app_and_saved_for_inspection(self):
+        updated = copy.deepcopy(HITS)
+        updated[0]['text'] = 'Old: the soundtrack is poor.\nUpdate: The soundtrack is excellent.'
+        updated[0]['metadata']['updated_at_utc'] = '2026-02-22T06:15:20Z'
+        with patch(__name__ + '.HITS', updated):
+            app = self.generate(self.app())
+        self.assertTrue(self.answer_visible(app))
+        payload = json.loads(self.api.requests[0]['messages'][1]['content'])
+        self.assertEqual(payload['evidence'][0]['text'], 'Update: The soundtrack is excellent.')
+        self.assertEqual(payload['evidence'][0]['updated_at_utc'], '2026-02-22T06:15:20+00:00')
+        self.assertNotIn('soundtrack is poor', json.dumps(payload))
+        result = json.loads((self.output / 'rag_summary/latest_answer.json').read_text())
+        self.assertEqual(result['context_evidence'], payload['evidence'])
+
+    def test_changed_update_timestamp_hides_cached_answer(self):
+        app = self.generate(self.app())
+        updated = copy.deepcopy(HITS)
+        updated[0]['metadata']['updated_at_utc'] = '2026-02-22T06:15:20Z'
+        with patch(__name__ + '.HITS', updated):
+            st.cache_resource.clear()
+            st.cache_data.clear()
+            app.run()
+        self.assertFalse(app.exception)
+        self.assertFalse(self.answer_visible(app))
+        self.assertEqual(len(self.api.requests), 1)
 
     def test_rerun_reuses_answer_without_another_api_call(self):
         app = self.generate(self.app())

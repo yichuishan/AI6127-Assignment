@@ -45,6 +45,16 @@ result = generate_summary(
 
 Each entry in `ranked_passages` requires `chunk_id` and `text`, with optional `game_name` and `source_url` fields inside `metadata`. For structured experiments, the runner adds eight aspect candidates per review without presence or sentiment labels. Reference answers and human sentiment labels are excluded from model inputs.
 
+### Latest Review Updates
+
+Live generation defaults to `context_policy="latest_update"`. Before context truncation, it selects the newest available snapshot of each review using `metadata.updated_at_utc` (or `timestamp_updated`), falling back to the creation timestamp. Different reviewers remain separate evidence sources.
+
+When a review contains explicit substantive `Edit:` or `Update:` blocks, only its latest visible update and continuation are provided to the model. Dated blocks use their dates when all updates are dated; otherwise their order determines the latest update. Repeated and numbered headings such as `Edit Edit:` and `(Edit 2:` are supported. Typo/phrasing-only notes do not replace the substantive review. If timestamps show an edit but no update boundaries are identifiable, the latest full snapshot is retained.
+
+For example, the Solar Crown review's final February 2026 update is provided without its earlier RTX 3070/60 FPS description. Conditions remaining in the selected update are preserved. Original stored reviews and citation IDs are unchanged. The same filtered evidence is used for generation, quote validation, verification, and revision. Available creation/update timestamps accompany the evidence; outputs record `context_policy` and the actual `context_evidence` for inspection. This uses the latest review content available in the retrieved hits.
+
+To explicitly use full reviews, pass `context_policy="full_review"` or the CLI option `--context-policy full_review`. The fixed 100-question experiment, including the experiment web interface, uses `full_review` to match its existing reference annotations and reproduce the reported results. Evaluating the new policy requires reference summaries and fact labels for the filtered evidence.
+
 ## Connect to the Group Retriever
 
 The group repository documents the handoff in [code/generation/README.md](https://github.com/GSrihariS/RAG_ASPA_Game_Retrieval/blob/main/code/generation/README.md). This module lives at `code/generation/rag_summary/`, alongside the separate aspect-based sentiment analysis module. The summarizer's callable is `generate_summary(query, hits)`; no `generation.answer` wrapper is required. Sentiment analysis can run separately on the same hits.
@@ -62,10 +72,11 @@ Pass the original user question and the final ranked `hits` list from `app.py` d
 | `hits[*].text` | Required; the review evidence used to generate claims |
 | `hits[*].metadata.game_name` | Optional; identifies the game discussed by the passage |
 | `hits[*].metadata.source_url` | Optional; retained as the review link in the output citations |
+| Review identity, timestamps, and chunk offsets in `metadata` | Used to select the latest snapshot/update; available timestamps accompany model evidence |
 | List order | Preserved when building the context; duplicate passage IDs are removed |
 | Scores, ranks, `retrieved_by`, and other metadata | Not included in the model context |
 
-`metadata.document_id`, `metadata.source`, and `metadata.title` can remain in each hit. The summarizer reads only the fields listed above. If a source URL is absent, citations still retain the original chunk ID.
+Review identity uses Steam chunk IDs, or `metadata.review_id` with `appid`/`game_name`, or `document_id`. Temporal selection reads `created_at_utc`/`updated_at_utc` (or `timestamp_created`/`timestamp_updated`), `chunk_index`, and `char_start` when available. `metadata.source` and `metadata.title` can remain in each hit. If a source URL is absent, citations still retain the original chunk ID.
 
 The return value includes:
 
@@ -74,6 +85,7 @@ The return value includes:
 - `citations`: unique cited `chunk_id` values and their available `source_url` values.
 - `status`: `ok`, `abstained`, or `no_evidence`.
 - `usage`, `latency_seconds`, `stage_calls`, and `claim_audit`: generation usage and verification records.
+- `context_policy` and, for live latest-update generation, `context_evidence`: the evidence policy and selected model input.
 
 For live retrieval, omit `fact_candidates`. Original chunk IDs provide citations for any retrieved review. The fixed-benchmark runner supplies its own fact catalog when running the structured evaluation.
 
@@ -105,7 +117,10 @@ from generation.rag_summary.rag_generator import (
 )
 
 st.markdown("**Evidence-grounded review summary**")
-evidence_key = (query, tuple((h["chunk_id"], h["text"]) for h in hits))
+evidence_key = (query, tuple(
+    (h["chunk_id"], h["text"], json.dumps(h.get("metadata") or {}, sort_keys=True))
+    for h in hits
+))
 
 if st.button("Generate summary", key="rag_summary_generate"):
     try:
@@ -267,6 +282,7 @@ A/B each completed 100 tasks; C/D each completed 99. See the saved outputs and [
 
 ```text
 rag_generator.py            Generation, citation validation, self-checking, and revision
+review_context.py           Latest review snapshots and explicit update selection
 prompts/                    A/B, fact-selection, verification, and revision prompts
 run_fact_experiments.py      Fixed-benchmark experiment runner
 experiment_web.py            Web backend, progress tracking, and ZIP export

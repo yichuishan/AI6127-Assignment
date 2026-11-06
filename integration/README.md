@@ -17,7 +17,7 @@ git apply --check /path/to/app.patch
 git apply /path/to/app.patch
 ```
 
-Use one of these methods. The group repository must already contain `code/generation/rag_summary/`.
+Use one of these methods. The group repository must already contain the updated `code/generation/rag_summary/`, including `review_context.py`. Live generation uses its latest-update context policy by default.
 
 ## Run
 
@@ -37,11 +37,12 @@ Normal reruns reuse the stored answer. A changed question or evidence hides the 
 
 Verified with Streamlit `1.66.1` using its real `AppTest` runtime and a local HTTP API implementing Chat Completions. No paid model calls were made.
 
-All 13 integration tests passed:
+All 15 integration tests passed:
 
 - Generation starts only when clicked; citations, environment settings and output files are correct.
 - Reruns reuse the result without another API call.
-- Changes to the question or evidence hide stale answers.
+- Changes to the question, evidence, or review update timestamps hide stale answers.
+- Explicit review updates reach the model without earlier opinions; selected text and timestamps are recorded in the output.
 - All four retrieval modes and the existing game filter feed the summarizer.
 - Empty retrieval, missing keys, HTTP errors, invalid JSON and invalid configuration are handled.
 - Abstention can be saved/downloaded, and file-write failures preserve the displayed answer.

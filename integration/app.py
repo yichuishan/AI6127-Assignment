@@ -155,8 +155,8 @@ def render_hit(rank, hit, mode):
 
 def render_summary(query, hits):
     evidence_key = (query, tuple(
-        (h['chunk_id'], h['text'], (h.get('metadata') or {}).get('game_name'),
-         (h.get('metadata') or {}).get('source_url')) for h in hits
+        (h['chunk_id'], h['text'], json.dumps(h.get('metadata') or {}, sort_keys=True))
+        for h in hits
     ))
     if st.button('Generate summary', key='rag_summary_generate'):
         st.session_state.pop('rag_summary_answer', None)
