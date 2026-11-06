@@ -1,40 +1,64 @@
-# Reference Summary Drafts
+# Bilingual Reference Summary Review
 
-This directory contains **100 assistant-drafted English reference summaries** for the fixed generation benchmark. They are based on the corresponding questions and original review evidence, with the existing query-specific scope annotations as guidance. A/B/C/D generated answers were not used to write these references. No generation API key was used.
+This directory contains **100 assistant-drafted English reference summaries**, with Chinese translations of all questions, draft summaries, 193 claim explanations, and 19 priority-review notes. Drafts are based on each question's fixed review evidence and the existing query-specific scope annotations. A/B/C/D generated answers were not used to write them. No generation or translation API key was used.
 
-All references start as **pending human review**. They are not yet confirmed gold references, and ROUGE has not been computed from them.
+All source records remain **pending human review**. They are not confirmed gold references, and ROUGE has not been computed from them. Original review evidence remains verbatim English; Chinese claim explanations are reading aids, not additional evidence.
 
 ## Files
 
-- `drafts/review.html`: standalone offline review page with editable summaries, per-claim sources, the full fixed context, progress tracking, and JSONL export/import.
-- `drafts/reference_drafts.jsonl`: 100 draft records, 193 claim-to-evidence mappings, original source texts, and context hashes.
-- `drafts/reference_review.csv`: spreadsheet review sheet with editable-reference and reviewer fields.
-- `drafts/review.md`: readable drafts and source evidence.
-- `drafts/manifest.json`: source hashes, counts, preparation method, and automated checks.
+- `drafts/review.html`: standalone bilingual review page, with side-by-side English/Chinese summaries, Chinese editing, evidence, browser progress, and JSONL export/import.
+- `drafts/reference_drafts.jsonl`: all drafts, aligned translations, claim-to-evidence mappings, source texts, and context hashes.
+- `drafts/reference_review.csv`: bilingual spreadsheet review sheet.
+- `drafts/review.md`: bilingual drafts and source evidence in Markdown.
+- `drafts/manifest.json`: source hashes, version metadata, counts, preparation method, and checks.
 
-## Review
+## Review in Chinese
 
-1. Download `review.html` and open it locally in a browser. No server or API key is needed.
-2. Read each question, draft, cited sources, and the full fixed retrieval context. Check relevance, support, game identity, conditions, and useful disagreement.
-3. Enter your reviewer name. Confirm the draft, edit and confirm it, or reject it. Click **Save this item** or **Save and next**.
-4. Export all review records to share or resume the work. Export approved references when ready for ROUGE evaluation.
+1. Open `drafts/review.html` locally in a browser. No server or API key is needed.
+2. Read the Chinese question and summary alongside the English originals. Review each claim and expand its original sources or the complete fixed context.
+3. Enter your reviewer name. The default editing language is Chinese; edit the Chinese summary as needed and add notes in Chinese.
+4. Confirm the current content, confirm after edits, or reject it. Click **Save** or **Save & next**.
+5. Export **all review records** or **Chinese edits awaiting translation**, and return the JSONL file to the assistant for an evidence-grounded English translation.
 
-The interface is in Chinese; reference text is in English. Nineteen questions are flagged for priority review because of limited evidence, subtopic gaps, or important conditions. All 100 still require human confirmation.
+The page does not translate edits automatically or call an API. It keeps both languages and tracks the translation step separately:
 
-Each exported record contains its query ID and context hash. Confirmed references have a nonempty `reference`, an explicit reviewer, and `human_reviewed: true`. Pending and rejected items are excluded from the approved-reference export. The original assistant draft remains recorded.
+| Decision | English-reference handling |
+|---|---|
+| Confirm the original draft without changing either language | The original English draft can be exported as approved |
+| Confirm changes to the Chinese summary | Content is reviewed, but the English reference remains unavailable until translated |
+| Edit English directly, leaving the Chinese draft unchanged | The reviewed English text can be exported; the Chinese text is labeled as the original comparison |
+| Pending or rejected | Excluded from approved-reference export |
 
-## Important source distinctions
+Nineteen questions are flagged for priority review. All 100 still require human confirmation. Browser progress is saved locally; export a backup after each review session. The page can restore review records from the previous English-only version and migrate its saved browser state.
+
+## Export Fields
+
+Every exported record retains `id`, `context_sha256`, the original English/Chinese drafts, reviewer details, decision, and notes.
+
+For confirmed Chinese changes:
+
+- `edited_draft_zh`: the reviewer's Chinese text.
+- `edited_draft_en`: the existing English text, retained for comparison.
+- `content_reviewed: true` and `review_language: "zh"`.
+- `translation_status: "pending_translation"`.
+- `reference: null` and `human_reviewed: false`: no finalized English scoring reference yet.
+
+Only English-ready records have a nonempty `reference` and `human_reviewed: true`. The approved-reference export excludes untranslated Chinese changes. Chinese characters are not accepted in the finalized English field.
+
+When importing translated records, `reference` is the translated English text, with `translated_reference_en` holding the same text, `translated_source_zh` holding the exact reviewed Chinese text, and `translated_by` identifying the translator. If either language changes afterward, the translation must be reconciled again. Review version `bilingual_v2` prevents the previous page from silently treating untranslated edits as English references.
+
+## Important Source Distinctions
 
 - q03: a graphics compliment is not evidence of smooth PC performance.
 - q12: the explicitly new Dawn of War player is not used as a longtime-fan reference.
 - q51: an average-FPS report does not establish whether stuttering occurs.
-- q53/q78: soundtrack or music details are not invented from generic sound praise.
+- q53/q78: radio or music details are not invented from general soundtrack/sound praise.
 - q76: old-PC reports about Resident Evil Requiem do not explain Left 4 Dead 2's performance.
-- q77: the Los Santos visual comparison is explicitly about graphics mods.
-- q10/q93: a later February-2026 edit is distinguished from the earlier performance report.
+- q77: the Los Santos comparison is explicitly about graphics mods.
+- q10/q93: a February-2026 edit is distinguished from the earlier performance report.
 
-## Evaluation scope
+## Evaluation Scope
 
-These are 100 question-conditioned summary drafts, distinct from the 1,000 source review passages and their aspect labels. Approval should be based on the evidence rather than agreement with any one generation method. Keep reference text free of inline citation IDs; provenance is stored separately in the claim-evidence mappings.
+These are 100 question-conditioned summary drafts, distinct from the 1,000 source review passages and their aspect labels. Approval should be based on evidence rather than agreement with a generation method. Keep scoring reference text free of inline citation IDs; provenance is stored separately.
 
-After review, the same approved references can evaluate each method's saved summaries. No retrieval or answer regeneration is needed for the existing fixed-context experiment. References are valid only for the questions and contexts identified by their hashes.
+The same finalized English references can evaluate every method's saved summaries. Existing fixed-context experiments do not need retrieval or generation to run again. References apply only to the questions and contexts identified by their hashes.

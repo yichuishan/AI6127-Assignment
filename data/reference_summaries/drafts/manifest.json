@@ -17,7 +17,7 @@
     "data/generation_annotations/passages.jsonl": "74916f1a94ca17f3a56cb1a5770274dc5e3c9c807c356cd549440a7b257cd080",
     "data/generation_annotations/query_annotations.jsonl": "d0e3bafd9480aa222f8048ca71694f09f57523c6e5416c0bc5182a1bc02ecec4"
   },
-  "reference_drafts_sha256": "911438201dccc1b03ed9ed8a7633cabd114490331e12607974bd8fe149f86ff5",
+  "reference_drafts_sha256": "a96bbb157d515156b7af5b2da86f678b2c372e8aacb8902bf949ea82a36f60ed",
   "drafting_procedure": "Assistant-written from original fixed review evidence and existing query-specific scope annotations; no A/B/C/D generation output used.",
   "model_api_calls": 0,
   "automated_checks": [
@@ -26,5 +26,17 @@
     "all source quotes and offsets match",
     "all references pending and excluded from confirmed-reference export"
   ],
-  "score_status": "ROUGE has not been computed; these drafts are not confirmed gold references."
+  "score_status": "ROUGE has not been computed; these drafts are not confirmed gold references.",
+  "english_draft_revision": "911438201dccc1b03ed9ed8a7633cabd114490331e12607974bd8fe149f86ff5",
+  "review_ui_version": "bilingual_v2",
+  "translated_questions": 100,
+  "translated_claims": 193,
+  "translation_note": "Assistant Chinese translations of questions, reference drafts, claim explanations and review notes. Original review evidence remains verbatim English.",
+  "chinese_edit_policy": "Confirmed Chinese changes are exported as pending_translation with reference=null until an English translation is prepared.",
+  "interface_validation": {
+    "workflow_checks_passed": 25,
+    "english_drafts_and_evidence_unchanged": true,
+    "pending_chinese_edits_excluded_from_english_export": true,
+    "legacy_review_restore_supported": true
+  }
 }
