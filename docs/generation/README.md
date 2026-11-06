@@ -33,11 +33,14 @@ Pass the original question and the same final `hits` list displayed by the app. 
 | `metadata.game_name` | Game identity used when interpreting the passage |
 | `metadata.source_url` | Original review URL retained in the output citations |
 | `metadata.created_at_utc`, `metadata.updated_at_utc` | Review timestamps; Unix `timestamp_created`/`timestamp_updated` are also accepted |
+| `metadata.helpful_votes` or `metadata.votes_up` | Helpful vote count used for vote-aware attribution and the publication-age weight |
 | `metadata.review_id`, `appid`, `document_id`, `chunk_index`, `char_start` | Optional identity and chunk-position information for temporal selection |
 
 Additional metadata such as `source` and `title` can remain in the hit. Rank and score fields such as `retrieved_by`, `sparse_rank`, `dense_rank`, `rrf_rank`, `rrf_score`, and `score` are not added to the model context. The ranked list order is preserved, duplicate passage IDs are removed, and the original user question is used rather than the expanded retrieval query.
 
 Live generation defaults to `context_policy="latest_update"`: among multiple snapshots of one review, only the newest available snapshot is retained. Explicit substantive `Edit:`/`Update:` sections are reduced to the latest visible update and continuation, including updates spanning multiple supplied chunks. Earlier opinions are excluded from generation and quote validation. Wording-only edit notes do not replace the review. If update boundaries are absent, the latest full snapshot is used. Available review timestamps and an `evidence_scope` field accompany the text. Original stored reviews and citation IDs are preserved. Update the complete `rag_summary/` module, including `review_context.py`, when installing this behavior.
+
+The same live context includes the recorded `helpful_votes`, `review_age_days`, and `helpful_votes_per_day` when available. The weight is `helpful_votes / max(days_since_first_publication, 1)`. Last-edit timestamps do not reset review age. Missing or invalid inputs leave the weight unavailable. The model receives one shared `as_of_utc` reference time across generation and self-check stages. These signals help prioritize relevant evidence without changing the retrieval order. Prompts ask for attribution such as “A review with 120 helpful votes reports …”; votes do not establish reviewer counts, agreement with each claim, or consensus.
 
 No conversion is required between the app's final `hits` list and the summarizer. BM25-only, dense-only, fused, and reranked results use the same input contract.
 
@@ -134,6 +137,7 @@ The returned dictionary contains:
 | `latency_seconds` | Generation workflow time |
 | `stage_calls`, `claim_audit` | Generation and self-verification records |
 | `context_policy`, `context_evidence` | The selected policy and actual latest-update context used by the model |
+| `context_as_of_utc`, `review_weight_formula` | Reference time and formula used to calculate live review weights |
 
 The `improved` configuration requires verbatim evidence quotes and validates them against the supplied passages. The other available configurations are `baseline`, `verify_delete`, and `verify_revise`. The latter two use the generation model for internal self-checking. Live generation uses the original chunk IDs for citations and does not require the benchmark's `fact_candidates`.
 

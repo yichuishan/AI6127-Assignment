@@ -38,6 +38,41 @@ def review_times(meta):
     return created, updated
 
 
+def context_time(as_of=None):
+    """Capture one UTC clock value per request; allow a fixed clock for replay."""
+    if as_of is None:
+        return datetime.now(timezone.utc)
+    if isinstance(as_of, datetime):
+        return (as_of.replace(tzinfo=timezone.utc) if as_of.tzinfo is None
+                else as_of.astimezone(timezone.utc))
+    parsed = timestamp(as_of)
+    if parsed is None:
+        raise ValueError('as_of must be a valid ISO timestamp, Unix timestamp, or datetime')
+    return parsed
+
+
+def review_signals(meta, as_of):
+    """Whole-review helpfulness per day since first publication, not last edit."""
+    signals = {}
+    votes = meta.get('helpful_votes')
+    if votes is None:
+        votes = meta.get('votes_up')
+    if isinstance(votes, str) and votes.isascii() and votes.isdigit():
+        try:
+            votes = int(votes)
+        except ValueError:
+            votes = None
+    if type(votes) is int and votes >= 0:
+        signals['helpful_votes'] = votes
+    created, _ = review_times(meta)
+    if created is not None and created <= as_of:
+        age_days = (as_of - created).total_seconds() / 86400
+        signals['review_age_days'] = round(age_days, 6)
+        if 'helpful_votes' in signals:
+            signals['helpful_votes_per_day'] = round(votes / max(age_days, 1.0), 6)
+    return signals
+
+
 def review_key(hit):
     meta = hit['metadata']
     steam = re.match(r'^(steam:[^:]+:[^:]+):chunk:\d+$', hit['chunk_id'])

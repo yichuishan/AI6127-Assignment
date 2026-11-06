@@ -55,6 +55,20 @@ For example, the Solar Crown review's final February 2026 update is provided wit
 
 To explicitly use full reviews, pass `context_policy="full_review"` or the CLI option `--context-policy full_review`. The fixed 100-question experiment, including the experiment web interface, uses `full_review` to match its existing reference annotations and reproduce the reported results. Evaluating the new policy requires reference summaries and fact labels for the filtered evidence.
 
+### Helpfulness and Publication Age
+
+Live latest-update generation also provides `helpful_votes`, `review_age_days`, and `helpful_votes_per_day` when the source fields are available. The weight is:
+
+```text
+helpful_votes_per_day = helpful_votes / max(days_since_first_publication, 1)
+```
+
+The one-day floor covers newly published reviews. The denominator uses the creation timestamp, even for edited reviews, because votes belong to the whole review. Missing/invalid counts or missing/future publication timestamps do not produce a weight. Raw Steam `votes_up` and `timestamp_created` are accepted alongside the normalized fields. Review text, citation IDs, and retrieval order are preserved.
+
+The prompt uses these signals to help prioritize relevant supported information. A cited review with helpful votes receives attribution such as “A review with 120 helpful votes reports …” rather than only “one reviewer says …”. Helpful votes do not count as additional reviewers or establish agreement with a particular claim or latest edit. Contradictory experiences remain part of the evidence.
+
+All stages share one UTC reference time, recorded as `context_as_of_utc` together with the formula and selected context. For reproducible inputs, pass `as_of="2026-11-06T12:00:00Z"` to `generate_summary` or `build_context`, or use the CLI option `--as-of`. The fixed `full_review` benchmark retains its original inputs and prompts.
+
 ## Connect to the Group Retriever
 
 The group repository documents the handoff in [code/generation/README.md](https://github.com/GSrihariS/RAG_ASPA_Game_Retrieval/blob/main/code/generation/README.md). This module lives at `code/generation/rag_summary/`, alongside the separate aspect-based sentiment analysis module. The summarizer's callable is `generate_summary(query, hits)`; no `generation.answer` wrapper is required. Sentiment analysis can run separately on the same hits.
@@ -73,6 +87,7 @@ Pass the original user question and the final ranked `hits` list from `app.py` d
 | `hits[*].metadata.game_name` | Optional; identifies the game discussed by the passage |
 | `hits[*].metadata.source_url` | Optional; retained as the review link in the output citations |
 | Review identity, timestamps, and chunk offsets in `metadata` | Used to select the latest snapshot/update; available timestamps accompany model evidence |
+| `hits[*].metadata.helpful_votes` or `votes_up` | Recorded helpful vote count; used with publication age as an auxiliary weight in live generation |
 | List order | Preserved when building the context; duplicate passage IDs are removed |
 | Scores, ranks, `retrieved_by`, and other metadata | Not included in the model context |
 
@@ -86,6 +101,7 @@ The return value includes:
 - `status`: `ok`, `abstained`, or `no_evidence`.
 - `usage`, `latency_seconds`, `stage_calls`, and `claim_audit`: generation usage and verification records.
 - `context_policy` and, for live latest-update generation, `context_evidence`: the evidence policy and selected model input.
+- `context_as_of_utc` and `review_weight_formula`: the reference time and formula for live helpfulness weights.
 
 For live retrieval, omit `fact_candidates`. Original chunk IDs provide citations for any retrieved review. The fixed-benchmark runner supplies its own fact catalog when running the structured evaluation.
 
@@ -282,7 +298,7 @@ A/B each completed 100 tasks; C/D each completed 99. See the saved outputs and [
 
 ```text
 rag_generator.py            Generation, citation validation, self-checking, and revision
-review_context.py           Latest review snapshots and explicit update selection
+review_context.py           Latest review updates and helpfulness/age signals
 prompts/                    A/B, fact-selection, verification, and revision prompts
 run_fact_experiments.py      Fixed-benchmark experiment runner
 experiment_web.py            Web backend, progress tracking, and ZIP export

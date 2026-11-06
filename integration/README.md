@@ -43,6 +43,7 @@ All 15 integration tests passed:
 - Reruns reuse the result without another API call.
 - Changes to the question, evidence, or review update timestamps hide stale answers.
 - Explicit review updates reach the model without earlier opinions; selected text and timestamps are recorded in the output.
+- Helpful votes and publication-age weights reach the model and are saved with the shared reference time.
 - All four retrieval modes and the existing game filter feed the summarizer.
 - Empty retrieval, missing keys, HTTP errors, invalid JSON and invalid configuration are handled.
 - Abstention can be saved/downloaded, and file-write failures preserve the displayed answer.

@@ -7,5 +7,6 @@
   "uses_paid_model_api": false,
   "verification": "Real Streamlit AppTest and local Chat Completions HTTP API; fixture scoring/model weights, actual expansion/fusion/reranking control flow and generator.",
   "production_changes": "One new render_summary helper and its imports/call; existing retrieval helpers unchanged.",
-  "temporal_evidence": "Latest available review snapshot/update is provided to the model; update timestamps invalidate stale answers."
+  "temporal_evidence": "Latest available review snapshot/update is provided to the model; update timestamps invalidate stale answers.",
+  "helpfulness_evidence": "Recorded helpful vote counts and publication-age weights reach the model and saved output, using one shared as_of UTC timestamp."
 }

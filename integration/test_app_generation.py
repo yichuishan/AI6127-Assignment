@@ -167,16 +167,21 @@ class AppGenerationTests(unittest.TestCase):
     def test_latest_update_is_used_by_live_app_and_saved_for_inspection(self):
         updated = copy.deepcopy(HITS)
         updated[0]['text'] = 'Old: the soundtrack is poor.\nUpdate: The soundtrack is excellent.'
+        updated[0]['metadata']['created_at_utc'] = '2026-01-01T00:00:00Z'
         updated[0]['metadata']['updated_at_utc'] = '2026-02-22T06:15:20Z'
+        updated[0]['metadata']['helpful_votes'] = 120
         with patch(__name__ + '.HITS', updated):
             app = self.generate(self.app())
         self.assertTrue(self.answer_visible(app))
         payload = json.loads(self.api.requests[0]['messages'][1]['content'])
         self.assertEqual(payload['evidence'][0]['text'], 'Update: The soundtrack is excellent.')
         self.assertEqual(payload['evidence'][0]['updated_at_utc'], '2026-02-22T06:15:20+00:00')
+        self.assertEqual(payload['evidence'][0]['helpful_votes'], 120)
+        self.assertGreater(payload['evidence'][0]['helpful_votes_per_day'], 0)
         self.assertNotIn('soundtrack is poor', json.dumps(payload))
         result = json.loads((self.output / 'rag_summary/latest_answer.json').read_text())
         self.assertEqual(result['context_evidence'], payload['evidence'])
+        self.assertEqual(result['context_as_of_utc'], payload['as_of_utc'])
 
     def test_changed_update_timestamp_hides_cached_answer(self):
         app = self.generate(self.app())
