@@ -38,6 +38,7 @@ ERROR_MESSAGES = {
     'output_truncated': '输出达到 token 上限而截断；增加输出预算，或关闭 DeepSeek 思考模式。',
     'empty_content': 'API 返回空白正文；可能是 JSON 模式输出空白或思考耗尽预算。',
     'invalid_json': '模型正文不是有效 JSON，无法解析。',
+    'invalid_fact_ids': '结构化事实选择格式错误：每条观点必须包含 fact_ids 字符串列表。',
     'invalid_claims': '模型未返回符合要求的 claims 列表，或观点数超过限制。',
     'invalid_verdict': '验证器返回的判定格式不符合要求。',
     'invalid_revision': '修订器未返回要求的 claim 字段。',
@@ -176,7 +177,7 @@ class OpenAICompatibleClient:
 
 
 
-def validate_claim(claim, sources, require_quotes=True):
+def validate_claim(claim, sources, require_quotes=True, require_fact_ids=False):
     """Normalize a claim or return None. Provenance checks are not semantic NLI."""
     if not isinstance(claim, dict):
         return None
@@ -199,13 +200,20 @@ def validate_claim(claim, sources, require_quotes=True):
             checked.add(cid)
         if checked != set(ids):
             return None
-    return {'text': text.strip(), 'chunk_ids': list(dict.fromkeys(ids)),
-            'evidence': evidence if require_quotes else []}
+    normalized = {'text': text.strip(), 'chunk_ids': list(dict.fromkeys(ids)),
+                  'evidence': evidence if require_quotes else []}
+    if require_fact_ids:
+        values = claim.get('fact_ids')
+        if not isinstance(values,list) or any(not isinstance(x,str) or not x.strip() for x in values):
+            return None
+        # Preserve incorrect IDs as predictions; the deterministic scorer penalizes them.
+        normalized['fact_ids'] = list(dict.fromkeys(values))
+    return normalized
 
 
 def generate_summary(query, hits, *, approach='verify_revise', model=None, client=None,
                      max_context_chars=24000, max_chunk_chars=4000,
-                     input_cost_per_million=None, output_cost_per_million=None, max_claims=12):
+                     input_cost_per_million=None, output_cost_per_million=None, max_claims=12, fact_candidates=None):
     """Generate, verify/delete or verify/revise/reverify using the same model/client."""
     started = time.perf_counter()
     if not isinstance(query, str) or not query.strip() or len(query) > 8000:
@@ -219,6 +227,10 @@ def generate_summary(query, hits, *, approach='verify_revise', model=None, clien
             raise ValueError('Token prices must be finite and nonnegative')
     context = build_context(hits, max_context_chars, max_chunk_chars)
     sources = {x['chunk_id']: x for x in context}
+    fact_mode = fact_candidates is not None
+    if fact_mode:
+        if not isinstance(fact_candidates,list) or any(not isinstance(c,dict) or set(c)!={'fact_id','chunk_id','aspect'} or c['chunk_id'] not in sources for c in fact_candidates):
+            raise ValueError('Fact candidates must be label-free catalog entries for the visible context')
     model = model or os.getenv('GENERATION_MODEL', 'gpt-4o-mini')
     semantic = approach in ('verify_delete', 'verify_revise')
     result = {'query': query, 'summary': ABSTENTION, 'citations': [], 'claims': [],
@@ -229,13 +241,18 @@ def generate_summary(query, hits, *, approach='verify_revise', model=None, clien
                              'semantic_check': semantic, 'generated_claims': 0,
                              'provenance_valid_claims': 0, 'retained_original_claims': 0,
                              'revised_claims': 0, 'semantic_discarded_claims': 0}}
+    if fact_mode: result['selected_fact_ids'] = []
     transport = client
 
     def invoke(stage, prompt, payload, claim_id=None):
         nonlocal transport
         if transport is None:
             transport = OpenAICompatibleClient()
-        messages = [{'role': 'system', 'content': (PROMPTS / (prompt + '.txt')).read_text(encoding='utf-8')},
+        system = (PROMPTS / (prompt + '.txt')).read_text(encoding='utf-8')
+        if fact_mode:
+            system += '\n' + (PROMPTS / 'fact_selection.txt').read_text(encoding='utf-8')
+            payload = dict(payload, fact_candidates=fact_candidates)
+        messages = [{'role': 'system', 'content': system},
                     {'role': 'user', 'content': json.dumps(payload, ensure_ascii=False)}]
         call_started = time.perf_counter()
         try:
@@ -267,12 +284,14 @@ def generate_summary(query, hits, *, approach='verify_revise', model=None, clien
         claims = output.get('claims')
         if not isinstance(claims, list) or len(claims) > max_claims:
             raise GenerationError('Model must return a claims list within max_claims', code='invalid_claims', stage='generate')
+        if fact_mode and any(not isinstance(c,dict) or not isinstance(c.get('fact_ids'),list) or any(not isinstance(x,str) or not x.strip() for x in c['fact_ids']) for c in claims):
+            raise GenerationError('Missing or invalid fact_ids',code='invalid_fact_ids',stage='generate')
         stats = result['validation']
         stats['generated_claims'] = len(claims)
         accepted = []
         for index, raw in enumerate(claims):
             claim_id = 'c' + str(index + 1)
-            claim = validate_claim(raw, sources, approach != 'baseline')
+            claim = validate_claim(raw, sources, approach != 'baseline', require_fact_ids=fact_mode)
             audit = {'claim_id': claim_id, 'original': raw, 'outcome': 'provenance_rejected'}
             result['claim_audit'].append(audit)
             if claim is None:
@@ -298,7 +317,7 @@ def generate_summary(query, hits, *, approach='verify_revise', model=None, clien
                 if 'claim' not in repair:
                     raise GenerationError('Revision must contain claim (object or null)', code='invalid_revision', stage='revise')
                 audit['revision_candidate'] = repair['claim']
-                revised = validate_claim(repair['claim'], sources)
+                revised = validate_claim(repair['claim'], sources, require_fact_ids=fact_mode)
                 if revised is not None:
                     second = verify(revised, claim_id, 'reverify')
                     audit['revision_verification'] = second
@@ -309,6 +328,8 @@ def generate_summary(query, hits, *, approach='verify_revise', model=None, clien
                         continue
                 audit['outcome'] = 'revision_abstained' if repair['claim'] is None else 'revision_rejected'
             stats['semantic_discarded_claims'] += 1
+        if fact_mode:
+            result['selected_fact_ids'] = list(dict.fromkeys(fid for c in accepted for fid in c['fact_ids']))
         cited = list(dict.fromkeys(cid for c in accepted for cid in c['chunk_ids']))
         result.update(claims=accepted,
                       citations=[{'chunk_id': cid, 'source_url': sources[cid]['source_url']} for cid in cited],

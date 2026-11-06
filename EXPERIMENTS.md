@@ -1,3 +1,6 @@
+> 当前网页已切换为事实 ID 算法评测，不再调用评测模型。请阅读第 13 节。
+> 第 1–12 节保留此前模型评分 CLI 的用法，以便复现历史结果。
+
 # 生成实验运行指南
 
 本脚本负责生成模块的实验，不会自动发布或修改检索实现。
@@ -293,3 +296,58 @@ python rejudge_results.py generation-experiment.zip --all-judges --output consis
 保留来源和改动记录。只补失败评分时不应隐瞒混合协议。成本指标为保留的最终评分估算，
 不包括无法从旧记录恢复的失败请求费用或全部历史重评费用，实际账单以供应商为准。
 输出目录必须是新的；中断前已完成的记录写入 checkpoint.jsonl，但当前命令不会原地自动续跑。
+
+
+## 13. 当前网页：结构化事实选择 + 非模型评分
+
+更新代码后关闭旧服务，重新 `python launch_web.py` 并刷新浏览器。
+网页只填写生成端 API、模型和密钥，没有 Qwen/其他评测模型设置。
+原有 A/B/C/D 保留为生成配置，最终评分不调用模型；C/D 的自检仍调用生成模型。
+新版 A 增加了事实 ID 输出要求，不能直接与旧版的 Likert 评分混为同一实验。
+
+生成时，每条 claim 输出 text、chunk_ids、fact_ids，B/C/D 还要求 evidence 摘录。
+最终 selected_fact_ids 从保留的 claims 合并得到：删除或修订观点会同步更新其事实选择。
+同一观点可以关联多个 review/aspect ID，所以最多观点数不等于最多事实 ID 数。
+缺失 fact_ids 字段记结构错误；格式正确但选择错误的 ID 保留并计入错误，不做乐观过滤。
+
+防泄漏：每条输入评论列出全部八个方面槽位，包括人工标注 Not mentioned 的槽位。
+候选仅含 fact_id、chunk_id、aspect；模型须读原文判断是否提及、情感及是否回答问题。
+模型看不到 reference_fact_ids、情感/主观性标签、人工摘录、覆盖答案和分歧组。
+参考集合在生成后由评分器读取。上传案例必须匹配原问题、片段顺序、正文和游戏，
+否则启动前拒绝评分，避免错用旧标签。
+
+默认数据为已整理的100题；问题数量可设1–100，重复次数1–5。
+默认3题×4方法×1次=12项任务。仅生成模型需要 Key，无需安装 ROUGE/BERTScore 或评测模型依赖。
+
+页面和下载文件报告：
+
+- fact_selection_precision / recall / f1：选中 ID 与严格参考事实集合的 P/R/F1。
+- coverage_unit_recall：同游戏、同方面、同情感单元的覆盖，允许一条代表重复评论。
+- polarity_contrast_coverage：适用正负体验组中，两侧至少各选择一条事实的比例。
+- out_of_context_fact_rate：选择超出人工标注事实池的比例，包含未提及方面的槽位。
+- unknown_candidate_id_count：连输入槽位目录都不存在的预测 ID 数量。
+- 调用数、生成逻辑延迟、P50/P95、tokens、可选生成成本、失败数量和指标有效样本数。
+
+没有适用分歧时该项留空；空参考且空选择单独记正确空选择，不伪造 Recall=100%。
+条件候选未复核，condition_retention_rate 保持 null。
+这些指标评价标签级事实选择，不能替代自由文本观点的语义支持判断。
+
+输出仍包含 input.jsonl 和 results/ 下的 checkpoint.jsonl、generation_results.json、
+summary.csv、report_data.json、report.md；新增 predictions.jsonl 和 evaluation_references.jsonl。
+下载 ZIP 解压后可以完全离线复算：
+
+```bash
+python evaluate_fact_selection.py /path/results/predictions.jsonl \
+  --annotations /path/results/evaluation_references.jsonl \
+  --output recomputed_fact_metrics.json
+```
+
+命令行同流程：设置 GENERATION_API_KEY 后运行：
+
+```bash
+python run_fact_experiments.py --output experiments/fact_smoke --limit 3 \
+  --model deepseek-v4-pro --base-url https://api.deepseek.com
+```
+
+此次切换不改写历史 ZIP 或旧模型评分代码；旧结果没有 fact_ids，不能自动转成新实验预测。
+网页任务关闭浏览器后仍在后台继续，停止按钮等待当前生成请求结束；输出存放位置保持不变。

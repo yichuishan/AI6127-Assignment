@@ -1,3 +1,7 @@
+> Current webpage: structured fact-ID scoring, with no evaluator-model configuration.
+> See EXPERIMENTS.md §13. The original CLI and judge workflow below remain available
+> for reproducing historical experiments.
+
 # Evidence-grounded RAG Summarization
 
 Independent generation for AI6127. Python 3.10+; core generation and offline tests use only the standard library. No Retrieval or aspect-based sentiment analysis is reimplemented.
@@ -158,3 +162,14 @@ reruns only failed final judgments and prompts privately for the evaluator key.
 It preserves existing summaries and does not invoke generation. Use --all-judges
 for a consistent new final judging protocol. Detailed schema diagnostics and
 representation normalizations are audited; see EXPERIMENTS.md §12.
+
+
+## Structured fact mode
+
+`generate_summary(..., fact_candidates=catalog)` enables the fact-selection output
+contract in `prompts/fact_selection.txt`. Every retained claim has `fact_ids`;
+`selected_fact_ids` is rebuilt from final claims after deletion/revision. Wrong
+predicted IDs are kept for scoring rather than silently filtered. Old calls without
+fact_candidates preserve the original interface. `run_fact_experiments.py` builds
+an all-eight-aspects catalog per visible passage, never a gold-filtered catalog.
+The webpage now uses this runner and exact ID scoring exclusively.

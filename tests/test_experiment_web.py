@@ -20,15 +20,13 @@ class Model:
         payload = json.loads(messages[1]['content'])
         system = messages[0]['content']
         if 'Evaluate an answer' in system:
-            obj={'faithfulness':{'score':5,'reason':'scripted'},'relevance':{'score':4,'reason':'scripted'},
-                'claim_support':[True for _ in payload['claims']],
-                'citation_support':[True for c in payload['claims'] for _ in c['chunk_ids']],
-                'context_relevance':[True for _ in payload['evidence']]}
+            raise AssertionError('No evaluator model may be called by this webpage')
         elif 'evidence verifier' in system:
             obj={'verdict':'supported','reason':'Scripted test only.'}
         else:
             evidence=payload['evidence'][0]
             obj={'claims':[{'text':'A retrieved reviewer shares an opinion.', 'chunk_ids':[evidence['chunk_id']],
+                'fact_ids':[c['fact_id'] for c in payload.get('fact_candidates',[]) if c['chunk_id']==evidence['chunk_id']][:1],
                 'evidence':[{'chunk_id':evidence['chunk_id'],'quote':evidence['text'][:40]}]}]}
         return {'content':json.dumps(obj),'usage':{'prompt_tokens':10,'completion_tokens':5}}
 
@@ -48,7 +46,7 @@ class WebTests(unittest.TestCase):
         return json.loads((client or self.client).open(req).read())
     def config(self):
         return {'api_key':'secret-web-test-only','base_url':'https://api.example.com/v1/chat/completions',
-                'model':'scripted','judge_model':'scripted-judge','limit':1,'repeats':1,'max_claims':2}
+                'model':'scripted','limit':1,'repeats':1,'max_claims':2}
     def wait(self,jid):
         for _ in range(200):
             state=json.loads(self.client.open(self.url+'/api/jobs/'+jid).read())
@@ -63,6 +61,12 @@ class WebTests(unittest.TestCase):
         z=zipfile.ZipFile(io.BytesIO(raw))
         self.assertIn('results/summary.csv',z.namelist())
         self.assertIn('results/report.md',z.namelist())
+        self.assertIn('results/predictions.jsonl',z.namelist())
+        self.assertIn('results/evaluation_references.jsonl',z.namelist())
+        rows=[json.loads(x) for x in z.read('results/checkpoint.jsonl').splitlines()]
+        self.assertTrue(all('selected_fact_ids' in r['result'] for r in rows))
+        self.assertTrue(all('fact_selection_f1' in r['metrics'] for r in rows))
+        self.assertTrue(all('faithfulness' not in r['metrics'] for r in rows))
         for name in z.namelist():self.assertNotIn(b'secret-web-test-only',z.read(name))
         other=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
         other.open(self.url).read()
@@ -105,24 +109,31 @@ class WebTests(unittest.TestCase):
         self.assertIn('stop_reason',state)
         self.assertNotIn('do-not-serialize-this-secret',json.dumps(state))
 
-    def test_generation_and_judge_options_are_independent(self):
+    def test_single_generator_transport_and_no_evaluator_config(self):
         instances=[]
         class RecordingModel(Model):
             def __init__(self,**kwargs):
-                instances.append(kwargs)
-                super().__init__(**kwargs)
+                instances.append(kwargs);super().__init__(**kwargs)
         self.app.factory=RecordingModel
-        cfg=self.config()
-        cfg.update(timeout=90,max_output_tokens=8192,thinking='disabled',judge_timeout=500,
-                   judge_max_output_tokens=2048,judge_thinking='enabled')
-        job=self.post('/api/jobs',cfg);self.wait(job['id'])
+        cfg=self.config();cfg.update(timeout=90,max_output_tokens=8192,thinking='disabled')
+        job=self.post('/api/jobs',cfg);state=self.wait(job['id'])
+        self.assertEqual(len(instances),1)
         self.assertEqual(instances[0]['thinking'],'disabled')
-        self.assertEqual(instances[1]['thinking'],'enabled')
         self.assertEqual(instances[0]['timeout'],90)
-        self.assertEqual(instances[1]['timeout'],500)
-        self.assertEqual(instances[1]['max_tokens'],2048)
-        manifest=self.app.jobs[job['id']].directory/'results/manifest.json'
-        self.assertEqual(json.loads(manifest.read_text())['judge_timeout'],500)
+        self.assertEqual(state['scored'],4)
+        manifest=json.loads((self.app.jobs[job['id']].directory/'results/manifest.json').read_text())
+        self.assertEqual(manifest['evaluation_method'],'exact_fact_id_matching_v1')
+        self.assertFalse(any(k.startswith('judge_') for k in manifest))
+        cfg=self.config();cfg['judge_model']='qwen3.8-max'
+        with self.assertRaises(urllib.error.HTTPError) as error:self.post('/api/jobs',cfg)
+        self.assertEqual(error.exception.code,400)
+
+    def test_changed_upload_cannot_reuse_old_labels(self):
+        from run_fact_experiments import jsonl,BENCHMARK
+        case=jsonl(BENCHMARK)[0];case['query']='A different question'
+        cfg=self.config();cfg['dataset_jsonl']=json.dumps(case)
+        with self.assertRaises(urllib.error.HTTPError) as error:self.post('/api/jobs',cfg)
+        self.assertEqual(error.exception.code,400)
 
     def test_stop_and_report_partial_results(self):
         entered, release=threading.Event(),threading.Event()

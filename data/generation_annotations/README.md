@@ -125,7 +125,7 @@ python evaluate_fact_selection.py predictions.jsonl --output fact_selection_resu
 
 **这些分数评价结构化 ID 选择，不证明 summary 的自由文本也表达正确。**
 旧版 generation_results.json 没有 selected_fact_ids，不能直接套用此评分器；
-后续需让生成器输出该字段或由人工完成映射。不要用标准答案反填预测后报告实验分数。
+当前新版网页已让每条 claim 输出 fact_ids，并从最终观点合并为 selected_fact_ids。旧实验仍需人工映射或重新生成。不要用标准答案反填预测后报告实验分数。
 
 ## 重新构建
 
@@ -138,3 +138,11 @@ python annotate_generation_facts.py \
 ```
 
 构建器拒绝覆盖非空输出目录，原始人工标签和此前实验结果不会被改写。
+
+
+## 网页已接入
+
+`python launch_web.py` 使用新事实选择流程，不调用独立评测模型。
+为防止从候选列表泄漏方面存在性，每条评论的八个方面均生成输入槽位，
+不会直接把 facts.jsonl 中仅包含已提及方面的列表发给模型。正确标签和参考集只用于评分。
+详见 EXPERIMENTS.md §13。

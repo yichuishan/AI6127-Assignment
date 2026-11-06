@@ -1,57 +1,69 @@
 # AI6127-Assignment
 
-Evidence-grounded RAG summarization and generation experiments.
+Evidence-grounded summarization with structured fact selection experiments.
 
-## Run the experiment webpage
+## Run the webpage
 
-Requires Python 3.10+. Download this branch with **Code → Download ZIP**, extract
-it, open a terminal in the extracted folder, and run:
+Python 3.10+ is required. Download this branch, extract it, and run:
 
 ```bash
 python launch_web.py
 ```
 
-The browser opens automatically. Enter your OpenAI-compatible API base URL, model
-ID and API key in the page, then start with three queries. Basic generation and
-the webpage use only Python's standard library. Keys are held in memory and are
-not saved to experiment files or browser storage. Stop the terminal with Ctrl+C
-when finished.
+Enter **only a generation API URL, model ID, and key**. Start with three queries.
+The page no longer configures or calls an evaluator model. Basic operation uses
+Python's standard library; no scoring model or embedding download is required.
+Keys remain in memory and are excluded from result files and browser storage.
 
-The page shows progress, API calls, failures and summary previews, and exports a
-ZIP containing outputs, citations, verification audits, CSV metrics and a report.
-A separate judge model enables final faithfulness/relevance estimates.
+## Current experiment
 
-## Included data
+The generator returns a natural-language summary and per-claim `fact_ids`.
+The program rebuilds `selected_fact_ids` from final retained claims and scores
+these IDs against the annotated benchmark using set matching:
 
-`experiments/steam_generation_eval.jsonl` contains 100 real query cases, each with
-up to ten saved `hybrid_rerank` evidence chunks, from the pinned teammate repository.
-These are condensed annotated-benchmark rankings, not production top-k results.
-Human summary references and key points have not yet been added; those are
-required for reference metrics and information coverage. This checkout does not
-include the complete retrieval corpus, indexes or all retrieval benchmark runs.
+- Fact-selection Precision, Recall and F1.
+- Game/aspect/sentiment coverage-unit recall.
+- Positive/negative experience coverage for applicable contrast groups.
+- Invalid or unannotated fact selections, latency, calls, tokens and optional cost.
 
-For optional ROUGE/BERTScore dependencies:
+The page shows progress, individual scores and a final method table. Downloaded
+ZIPs contain predictions, reference sets, full outputs, checkpoints, CSV metrics
+and a Markdown report. **The scores evaluate structured selection, not free-text
+entailment.** Condition retention is not reported because conditions remain
+unreviewed candidates.
+
+A/B/C/D remain available. C/D use the generation model for their internal
+verification/revision; final scoring always uses deterministic code. B/C/D share
+an initial draft. Their call counts include this internal generation work.
+
+To prevent gold-label leakage, the model sees every one of eight possible aspect
+slots for each input review, including unmentioned aspects. It receives neither
+human sentiment/presence labels nor reference ID sets.
+
+## Data
+
+The fixed benchmark has 100 questions and up to ten saved `hybrid_rerank` passages
+per question. Labels derive from 1,000 human-reviewed passages. These are
+condensed annotated rankings, not production retrieval top-k results.
+See [the annotation documentation](data/generation_annotations/README.md).
+Optional uploaded subsets must preserve the original questions and evidence.
+
+## Command line
 
 ```bash
-python -m pip install -r requirements-generation-eval.txt
+# Set GENERATION_API_KEY privately, then run the same new experiment:
+python run_fact_experiments.py --output experiments/fact_smoke --limit 3
+
+# Recompute ID metrics without any model calls:
+python evaluate_fact_selection.py predictions.jsonl
 ```
 
-See [EXPERIMENTS.md](EXPERIMENTS.md) for experiment commands, metrics, limitations
-and private key setup, and [README_generation.md](README_generation.md) for the
-generator interface and verification methods.
-
-## Tests
+See [EXPERIMENTS.md](EXPERIMENTS.md), Section 13, for the current webpage protocol.
+Earlier sections and `run_generation_experiments.py` / `rejudge_results.py`
+preserve the previous LLM-judge experiment for reproducibility.
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-Tests use scripted clients; passing tests do not establish real LLM quality gains.
-
-
-## Structured fact annotations
-
-[data/generation_annotations/README.md](data/generation_annotations/README.md)
-documents the full 1,000-passage fact bank, 100 query reference sets, reviewable
-condition/contrast candidates, and the model-free `evaluate_fact_selection.py`
-scorer. Human source labels and newly derived annotations have separate provenance.
+Tests use scripted clients and do not establish real model performance.
