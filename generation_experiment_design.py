@@ -2,9 +2,9 @@
 import hashlib
 import json
 from pathlib import Path
+from generation_paths import DESIGN_DIR
 
 ROOT = Path(__file__).resolve().parent
-DESIGN_DIR = ROOT/'data/generation_experiment'
 SPLIT_PATH = DESIGN_DIR/'split.json'
 EXAMPLES_PATH = DESIGN_DIR/'few_shot_examples.json'
 EXPERIMENT_PROTOCOL = 'fewshot_compression_2x2_v1'

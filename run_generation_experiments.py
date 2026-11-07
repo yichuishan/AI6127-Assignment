@@ -21,10 +21,9 @@ from generation_experiment_design import (APPROACHES, METHODS, EXPERIMENT_PROTOC
     design_hashes, load_split, load_examples, select_cases, validate_cases)
 from context_compression import DEFAULT_RATIO, VERSION as COMPRESSION_VERSION, compress_context
 from review_context import context_time
+from generation_paths import BENCHMARK, DRAFTS
 
 ROOT = Path(__file__).resolve().parent
-BENCHMARK = ROOT/'experiments/steam_generation_eval.jsonl'
-DRAFTS = ROOT/'data/reference_summaries/drafts/reference_drafts.jsonl'
 BENCHMARK_CONTEXT_POLICY = 'full_review'
 
 
@@ -252,7 +251,7 @@ def run(cases,out,*,client,model,approaches=APPROACHES,repeats=1,max_claims=4,se
         context_limits={'max_context_chars':24000,'max_chunk_chars':4000},
         prompt_hashes={p:hashlib.sha256((PROMPTS/p).read_bytes()).hexdigest() for p in ('baseline.txt','few_shot.txt')},
         data_hash=hashlib.sha256(json.dumps(cases,sort_keys=True,ensure_ascii=False).encode()).hexdigest(),
-        code_hashes={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in ('rag_generator.py','review_context.py','run_generation_experiments.py','evaluate_generation.py','context_compression.py','generation_experiment_design.py','experiment_execution.py')},
+        code_hashes={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in ('rag_generator.py','review_context.py','run_generation_experiments.py','evaluate_generation.py','context_compression.py','generation_experiment_design.py','experiment_execution.py','generation_paths.py')},
         reference_sha256=hashlib.sha256(REFERENCES.read_bytes()).hexdigest())
     dump(out/'manifest.json',manifest)
     dump(out/'split.json',load_split())

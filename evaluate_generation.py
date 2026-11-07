@@ -7,9 +7,9 @@ import json
 from pathlib import Path
 import re
 import zipfile
+from generation_paths import BENCHMARK, REFERENCES
 
 ROOT = Path(__file__).resolve().parent
-REFERENCES = ROOT / 'data/reference_summaries/reviewed/approved_references.jsonl'
 EVALUATION_METHOD = 'rouge_1_2_l_human_references_v1'
 F1_METRICS = ('rouge1_f1', 'rouge2_f1', 'rougeL_f1')
 SCORING_CONFIG = {
@@ -115,7 +115,7 @@ def rescore(rows, references=None):
         load_split, validate_cases)
     from context_compression import compress_context
     refs = references if references is not None else load_references()
-    cases = {c['id']:c for c in jsonl(ROOT/'experiments/steam_generation_eval.jsonl')}
+    cases = {c['id']:c for c in jsonl(BENCHMARK)}
     out,seen = copy.deepcopy(rows),set()
     if not isinstance(out,list) or not out:
         raise ValueError('Expected nonempty saved generation results')
@@ -172,7 +172,7 @@ def main():
     from run_generation_experiments import benchmark, dump, export
     rows = rescore(load_results(args.source))
     selected = {row['case_id'] for row in rows}
-    cases = [c for c in jsonl(ROOT/'experiments/steam_generation_eval.jsonl') if c['id'] in selected]
+    cases = [c for c in jsonl(BENCHMARK) if c['id'] in selected]
     refs = benchmark(cases)
     out.mkdir(parents=True, exist_ok=True)
     (out/'input.jsonl').write_text(''.join(json.dumps(c,ensure_ascii=False)+'\n' for c in cases), encoding='utf-8')

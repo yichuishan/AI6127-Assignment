@@ -20,9 +20,10 @@ from context_compression import DEFAULT_RATIO
 from run_generation_experiments import jsonl, run, benchmark, aggregate
 from evaluate_generation import EVALUATION_METHOD, load_references
 from experiment_execution import EXECUTION_PROTOCOL, DEFAULT_CONCURRENCY, DEFAULT_RETRIES, MAX_CONCURRENCY
+from generation_paths import BENCHMARK, RESULTS_DIR
 
 ROOT = Path(__file__).resolve().parent
-DEFAULT_DATASET = ROOT / 'experiments/steam_generation_eval.jsonl'
+DEFAULT_DATASET = BENCHMARK
 
 
 def endpoint(value):
@@ -147,7 +148,7 @@ class Job:
 
 class Application:
     def __init__(self, run_root=None, factory=OpenAICompatibleClient):
-        self.run_root = Path(run_root or ROOT/'experiments/web_runs')
+        self.run_root = Path(run_root or RESULTS_DIR)
         self.run_root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.factory, self.jobs, self.sessions, self.lock = factory, {}, set(), threading.Lock()
 
