@@ -65,9 +65,11 @@ helpful_votes_per_day = helpful_votes / max(days_since_first_publication, 1)
 
 The one-day floor covers newly published reviews. The denominator uses the creation timestamp, even for edited reviews, because votes belong to the whole review. Missing/invalid counts or missing/future publication timestamps do not produce a weight. Raw Steam `votes_up` and `timestamp_created` are accepted alongside the normalized fields. Review text, citation IDs, and retrieval order are preserved.
 
-The prompt uses these signals to help prioritize relevant supported information. A cited review with helpful votes receives attribution such as “A review with 120 helpful votes reports …” rather than only “one reviewer says …”. Helpful votes do not count as additional reviewers or establish agreement with a particular claim or latest edit. Contradictory experiences remain part of the evidence.
+The prompt uses these signals to help prioritize relevant supported information. `is_high_helpfulness` identifies reviews with at least ten helpful votes and at or above the nearest-rank upper quartile of distinct reviews in the visible context. Only these reviews may be called “highly upvoted” when useful to the answer. Lower-vote evidence is integrated without vote attribution; exact vote counts and rates stay out of answer prose. Votes do not count as additional reviewers or establish agreement with each assertion.
 
-All stages share one UTC reference time, recorded as `context_as_of_utc` together with the formula and selected context. For reproducible inputs, pass `as_of="2026-11-06T12:00:00Z"` to `generate_summary` or `build_context`, or use the CLI option `--as-of`. The fixed `full_review` benchmark retains its original inputs and prompts.
+Generation now aims for one coherent answer: lead with the response to the question, merge overlapping evidence, and connect benefits, limitations and disagreements naturally. The JSON `claims` array contains its sentences in reading order, with citations and quotes preserved. The prompts prohibit adding unsupported history, present popularity, recent improvements or new mod development merely to make the answer sound fluent.
+
+All stages share one UTC reference time, recorded as `context_as_of_utc` together with the formula and selected context. For reproducible inputs, pass `as_of="2026-11-06T12:00:00Z"` to `generate_summary` or `build_context`, or use the CLI option `--as-of`. The fixed `full_review` benchmark retains its original evidence payload and annotations. Current prompts use the synthesis instructions; archived generation results and their recorded prompt hashes remain available for reproduction.
 
 ## Connect to the Group Retriever
 

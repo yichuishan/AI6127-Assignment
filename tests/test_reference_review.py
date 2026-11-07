@@ -6,6 +6,8 @@ from pathlib import Path
 import re
 import unittest
 
+from review_context import high_helpfulness_threshold, review_key
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DRAFTS = ROOT / 'data/reference_summaries/drafts'
@@ -16,14 +18,14 @@ class ReferenceReviewTests(unittest.TestCase):
     def setUpClass(cls):
         cls.rows = [json.loads(line) for line in (DRAFTS / 'reference_drafts.jsonl').read_text().splitlines()]
         cls.manifest = json.loads((DRAFTS / 'manifest.json').read_text())
-        cls.audit = json.loads((DRAFTS / 'attribution_revision.json').read_text())
+        cls.audit = json.loads((DRAFTS / 'synthesis_revision.json').read_text())
         cls.sources = {h['chunk_id']: h for line in (ROOT / 'experiments/steam_generation_eval.jsonl').read_text().splitlines()
                        for h in json.loads(line)['results']}
 
     def test_complete_pending_dataset_and_source_hashes(self):
         self.assertEqual(len(self.rows), 100)
         self.assertEqual(len({r['id'] for r in self.rows}), 100)
-        self.assertEqual(sum(len(r['draft_claims']) for r in self.rows), 193)
+        self.assertEqual(sum(len(r['draft_claims']) for r in self.rows), 172)
         for r in self.rows:
             self.assertEqual(r['review_status'], 'pending')
             self.assertFalse(r['human_reviewed'])
@@ -35,45 +37,46 @@ class ReferenceReviewTests(unittest.TestCase):
 
     def test_every_vote_count_and_quote_maps_to_original_source(self):
         for r in self.rows:
+            votes = {review_key(self.sources[cid]): m['helpful_votes'] for cid, m in r['review_metadata'].items()}
+            threshold = high_helpfulness_threshold(votes.values())
+            self.assertEqual(r['high_helpful_votes_threshold'], threshold)
             for cid, metadata in r['review_metadata'].items():
                 source = self.sources[cid]['metadata']
-                self.assertEqual(metadata, {k: source[k] for k in
-                                           ('helpful_votes', 'created_at_utc', 'updated_at_utc') if k in source})
+                expected = {k: source[k] for k in ('helpful_votes', 'created_at_utc', 'updated_at_utc') if k in source}
+                expected['is_high_helpfulness'] = source.get('helpful_votes', -1) >= threshold
+                self.assertEqual(metadata, expected)
             for c in r['draft_claims']:
                 cited = {e['chunk_id']: e for e in c['supporting_evidence']}
                 for e in cited.values():
                     self.assertEqual(self.sources[e['chunk_id']]['text'][e['start']:e['end']], e['quote'])
                     self.assertIn(e['chunk_id'], r['review_metadata'])
-                for mention in c.get('attribution_vote_sources', []):
-                    self.assertIn(mention['chunk_id'], cited)
-                    self.assertEqual(mention['sample_id'], cited[mention['chunk_id']]['sample_id'])
-                    self.assertEqual(mention['helpful_votes'], r['review_metadata'][mention['chunk_id']]['helpful_votes'])
-                    self.assertGreater(mention['helpful_votes'], 0)
-                    self.assertIn(str(mention['helpful_votes']), c['text'])
-                    self.assertIn(str(mention['helpful_votes']), c['text_zh'])
+                for cid in c.get('high_helpfulness_sources', []):
+                    self.assertIn(cid, cited)
+                    self.assertTrue(r['review_metadata'][cid]['is_high_helpfulness'])
+                self.assertEqual('highly upvoted' in c['text'].lower(), '高赞' in c['text_zh'])
+                if 'highly upvoted' in c['text'].lower():
+                    self.assertTrue(c['high_helpfulness_sources'])
 
     def test_revisions_are_traceable_and_bilingual_claims_form_summaries(self):
-        self.assertEqual(self.audit['revised_records'], 48)
-        self.assertEqual(self.audit['revised_claims'], 54)
-        self.assertEqual(len(self.audit['changes']), 54)
-        records = {r['id']: r for r in self.rows}
-        for change in self.audit['changes']:
-            r = records[change['id']]
-            c = next(c for c in r['draft_claims'] if c['claim_id'] == change['claim_id'])
-            for key in ('text', 'text_zh'):
-                self.assertEqual(change[key], c[key])
-                self.assertNotEqual(change['previous_' + key], change[key])
+        self.assertEqual(self.audit['records_rewritten'], 100)
+        self.assertEqual(self.audit['claims'], 172)
+        self.assertEqual(self.audit['counts_in_answer_prose'], False)
         for r in self.rows:
             self.assertEqual(r['draft_reference_summary'], ' '.join(c['text'] for c in r['draft_claims']))
             self.assertEqual(r['draft_reference_summary_zh'], ''.join(c['text_zh'] for c in r['draft_claims']))
-            for c in r['draft_claims']:
-                if len(c['supporting_evidence']) == 1:
-                    cid = c['supporting_evidence'][0]['chunk_id']
-                    if r['review_metadata'][cid].get('helpful_votes', 0) > 0:
-                        self.assertIn('helpful vote', c['text'])
-                        self.assertIn('有用投票', c['text_zh'])
-                        self.assertNotRegex(c['text'], r'(?i)\b(?:one|a) reviewer\b')
-                        self.assertNotIn('一位评论者', c['text_zh'])
+            self.assertNotRegex(r['draft_reference_summary'], r'\d+\s+helpful votes?')
+            self.assertNotRegex(r['draft_reference_summary_zh'], r'\d+\s*(?:次有用投票|人点赞)')
+            self.assertNotRegex(r['draft_reference_summary'], r'(?i)\b(?:one|another) reviewer\b')
+            self.assertNotIn('一位评论者', r['draft_reference_summary_zh'])
+            self.assertEqual(r['reference_policy'], 'coherent_synthesis_v1')
+
+    def test_l4d_answer_synthesizes_evidence_without_adding_popularity_or_mod_development(self):
+        r = next(r for r in self.rows if r['query_id'] == 'q06')
+        self.assertEqual(len(r['draft_claims']), 1)
+        self.assertGreater(len(r['draft_claims'][0]['supporting_evidence']), 1)
+        self.assertIn('friends', r['draft_reference_summary'])
+        self.assertIn('mods', r['draft_reference_summary'])
+        self.assertNotRegex(r['draft_reference_summary'].lower(), r'new mods|classic|all players|recent reviews')
 
     def test_html_csv_and_markdown_show_the_same_drafts(self):
         page = (DRAFTS / 'review.html').read_text()

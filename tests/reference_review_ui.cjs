@@ -48,8 +48,8 @@ async function main() {
   check('100 pending rows with vote-aware draft and source headings', () => {
     assert.equal(rows.length, 100);
     b.run(`show(${index})`);
-    assert.match(b.get('reference-zh').value, /224 次有用投票/);
-    assert.match(b.get('reference').value, /224 helpful votes/);
+    assert.match(b.get('reference-zh').value, /高赞评论/);
+    assert.match(b.get('reference').value, /highly upvoted review/);
     const heading = b.get('claim-evidence').children[0].children.find(e => e.children?.[0]?.textContent?.includes('helpful votes'));
     assert.match(heading.children[0].textContent, /224 次有用投票/);
     assert.match(heading.children[1].textContent, /2020-04-08/);
@@ -58,10 +58,10 @@ async function main() {
   check('versioned export includes matching metadata and English draft revisions', () => {
     const record = clone(b.run(`record(DATA[${index}])`));
     assert.equal(record.dataset_revision, revision);
-    assert.equal(record.review_ui_version, 'bilingual_votes_v3');
+    assert.equal(record.review_ui_version, 'bilingual_synthesis_v4');
     assert.equal(record.english_draft_revision, manifest.english_draft_revision.slice(0,20));
     assert.equal(record.review_metadata_sha256, r.review_metadata_sha256);
-    assert.equal(record.reference_policy, 'vote_aware_attribution_v1');
+    assert.equal(record.reference_policy, 'coherent_synthesis_v1');
   });
   check('approving unchanged bilingual draft yields an English-ready reference', () => {
     b.get('reviewer').value = 'Tester'; b.get('decision').value = 'approved';
@@ -79,9 +79,9 @@ async function main() {
     assert.equal(record.reference, null);
   });
 
-  const old = {review_status:'approved', english_text:r.previous_draft_reference_summary,
-    chinese_text:r.previous_draft_reference_summary_zh, reviewer:'Original reviewer', review_notes:'Keep this note'};
-  check('saved bilingual-v2 approvals migrate to revised text and pending status', () => {
+  const old = {review_status:'approved', english_text:r.legacy_drafts[1].en,
+    chinese_text:r.legacy_drafts[1].zh, reviewer:'Original reviewer', review_notes:'Keep this note'};
+  check('saved previous-version approvals migrate to revised text and pending status', () => {
     b = browser({[legacyKey]:JSON.stringify({[r.id]:old})});
     b.run(`show(${index})`);
     const record = clone(b.run(`record(DATA[${index}])`));
@@ -101,6 +101,15 @@ async function main() {
     assert.equal(record.edited_draft_zh, '我的中文修改。');
     assert.equal(record.translated_by, ''); assert.equal(record.review_status, 'pending');
   });
+  check('older bilingual-v2 browser progress also restores into the new synthesis draft', () => {
+    const v2Revision = b.run("LEGACY_REVISIONS.find(v=>v.endsWith('_bilingual_v2'))");
+    const prior = {...old, english_text:r.legacy_drafts[0].en, chinese_text:r.legacy_drafts[0].zh};
+    b = browser({['ai6127_reference_review_' + v2Revision]:JSON.stringify({[r.id]:prior})});
+    const record = clone(b.run(`record(DATA[${index}])`));
+    assert.equal(record.edited_draft_en, r.draft_reference_summary);
+    assert.equal(record.edited_draft_zh, r.draft_reference_summary_zh);
+    assert.equal(record.review_status, 'pending');
+  });
   check('current-version browser approvals survive reload', () => {
     const approved = {...old, english_text:r.draft_reference_summary, chinese_text:r.draft_reference_summary_zh};
     b = browser({[key]:JSON.stringify({[r.id]:approved})});
@@ -113,15 +122,15 @@ async function main() {
   }
   b = browser();
   await importRows([{id:r.id, context_sha256:r.context_sha256, dataset_revision:legacyRevision,
-    review_status:'approved', reviewer:'Legacy', edited_draft_en:r.previous_draft_reference_summary,
-    edited_draft_zh:r.previous_draft_reference_summary_zh}]);
+    review_status:'approved', reviewer:'Legacy', edited_draft_en:r.legacy_drafts[1].en,
+    edited_draft_zh:r.legacy_drafts[1].zh}]);
   check('imported legacy approvals also require fresh confirmation', () => {
     const record = clone(b.run(`record(DATA[${index}])`));
     assert.equal(record.review_status, 'pending'); assert.equal(record.human_reviewed, false);
     assert.equal(record.edited_draft_en, r.draft_reference_summary);
   });
-  await importRows([{id:r.id, context_sha256:r.context_sha256, dataset_revision:legacyRevision.replace('_bilingual_v2',''),
-    review_status:'approved', reviewer:'English-only', edited_draft:r.previous_draft_reference_summary}]);
+  await importRows([{id:r.id, context_sha256:r.context_sha256, dataset_revision:b.run('LEGACY_REVISIONS.at(-1)'),
+    review_status:'approved', reviewer:'English-only', edited_draft:r.legacy_drafts[0].en}]);
   check('English-only exports restore without losing reviewer details', () => {
     const record = clone(b.run(`record(DATA[${index}])`));
     assert.equal(record.reviewer, 'English-only'); assert.equal(record.review_status, 'pending');

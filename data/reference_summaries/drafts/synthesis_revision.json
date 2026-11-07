@@ -1,0 +1,14 @@
+{
+  "policy": "coherent_synthesis_v1",
+  "source_revision": "65edbcd",
+  "records_rewritten": 100,
+  "claims": 172,
+  "high_helpfulness_rule": "helpful_votes >= max(10, nearest_rank_75th_percentile_of_distinct_context_reviews)",
+  "counts_in_answer_prose": false,
+  "source_texts_and_context_hashes_unchanged": true,
+  "principles": [
+    "Lead with the answer, combine compatible evidence, preserve disagreements and conditions.",
+    "Mention high-vote attribution only when useful; omit raw vote counts from prose.",
+    "Do not add popularity, history, recency, mod development or universal agreement without evidence."
+  ]
+}

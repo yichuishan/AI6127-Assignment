@@ -5,7 +5,7 @@ import json
 import unittest
 
 from rag_generator import build_context, generate_summary
-from review_context import context_time
+from review_context import context_time, high_helpfulness_threshold
 from test_verification import ScriptedClient, verdict
 
 
@@ -80,14 +80,16 @@ class ReviewWeightTests(unittest.TestCase):
 
     def test_generation_verification_and_revision_receive_identical_signals_and_clock(self):
         source = review(120)
-        claim = {'text': 'A review with 120 helpful votes reports smooth performance on Windows.',
+        claim = {'text': 'A highly upvoted review praises smooth performance on Windows.',
                  'chunk_ids': [source['chunk_id']],
                  'evidence': [{'chunk_id': source['chunk_id'], 'quote': 'It runs smoothly on Windows.'}]}
         client = ScriptedClient({'claims': [claim]}, verdict('partially_supported'),
                                 {'claim': claim}, verdict('supported'))
         result = generate_summary('How does it run?', [source], client=client, as_of=AS_OF)
         self.assertEqual(result['status'], 'ok')
-        self.assertIn('120 helpful votes', result['summary'])
+        self.assertIn('highly upvoted', result['summary'])
+        self.assertNotIn('120', result['summary'])
+        self.assertTrue(result['context_evidence'][0]['is_high_helpfulness'])
         self.assertEqual(result['context_as_of_utc'], '2026-11-06T12:00:00+00:00')
         self.assertEqual(result['context_evidence'][0]['helpful_votes_per_day'], 12)
         for messages in client.calls:
@@ -97,7 +99,29 @@ class ReviewWeightTests(unittest.TestCase):
             self.assertIn('REVIEW HELPFULNESS RULE', messages[0]['content'])
             self.assertIn('not additional reviewers', messages[0]['content'])
 
-    def test_full_review_benchmark_input_and_prompts_remain_unchanged(self):
+    def test_relative_high_vote_rule_has_an_absolute_floor(self):
+        self.assertEqual(high_helpfulness_threshold([0, 1, 2, 3]), 10)
+        self.assertEqual(high_helpfulness_threshold([10, 20, 30, 40]), 30)
+        self.assertEqual(high_helpfulness_threshold([]), 10)
+        sources = []
+        for i, count in enumerate((10, 20, 30, 40), 1):
+            source = review(count);source['chunk_id'] = f'steam:1:{i}:chunk:001';sources.append(source)
+        self.assertEqual([e['is_high_helpfulness'] for e in build_context(sources, as_of=AS_OF)],
+                         [False, False, True, True])
+
+    def test_high_vote_quantile_counts_a_review_once_across_chunks(self):
+        sources = []
+        for i, count in enumerate((1, 10, 100, 200), 1):
+            source = review(count);source['text'] = 'Current opinion.'
+            source['chunk_id'] = f'steam:1:{i}:chunk:001';sources.append(source)
+        for i in range(2, 9):
+            duplicate = copy.deepcopy(sources[0]);duplicate['chunk_id'] = f'steam:1:1:chunk:{i:03d}'
+            sources.append(duplicate)
+        context = build_context(sources, as_of=AS_OF)
+        self.assertFalse(context[1]['is_high_helpfulness'])
+        self.assertTrue(context[2]['is_high_helpfulness'])
+
+    def test_full_review_benchmark_contract_excludes_live_vote_fields(self):
         client = ScriptedClient({'claims': []})
         result = generate_summary('How does it run?', [review()], approach='baseline', client=client,
                                   context_policy='full_review')

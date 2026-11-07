@@ -14,9 +14,9 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 if __package__:
-    from .review_context import context_time, latest_review_hits, review_signals, review_times
+    from .review_context import context_time, high_helpfulness_threshold, latest_review_hits, review_key, review_signals, review_times
 else:
-    from review_context import context_time, latest_review_hits, review_signals, review_times
+    from review_context import context_time, high_helpfulness_threshold, latest_review_hits, review_key, review_signals, review_times
 
 PROMPTS = Path(__file__).with_name('prompts')
 APPROACHES = ('baseline', 'improved', 'verify_delete', 'verify_revise')
@@ -37,16 +37,20 @@ REVIEW_WEIGHT_INSTRUCTIONS = (
     'to help prioritize relevant, supported information; do not let popularity '
     'replace relevance, proof, conditions, or conflicting experiences. Missing '
     'weights are unknown, not zero. Repeated chunks of one review are one source. '
-    'When expressing a point from a cited review with positive helpful_votes, '
-    'use vote-aware attribution such as "A review with 120 helpful votes reports..." '
-    'rather than reducing it to an unqualified "one reviewer says". With several '
-    'sources, use wording such as "Retrieved reviews, including one with 120 helpful '
-    'votes, report..." only when their texts support that statement. Use the exact '
-    'supplied helpful vote count. Helpful votes mark the whole review as useful; '
+    'is_high_helpfulness marks reviews with at least ten helpful votes and at or '
+    'above the upper quartile of distinct visible reviews by helpful vote count. '
+    'Use "a highly upvoted review praises/criticizes..." only for a cited review '
+    'with this flag, when its prominence helps the answer. For other reviews, '
+    'integrate their supported information without mentioning votes. Do not '
+    'include exact vote counts, vote rates, or age weights in the answer prose. '
+    'Do not turn each source into a separate mini-summary: organize one coherent '
+    'answer around the question, combine overlapping points, and use attribution '
+    'only to mark important prominence, disagreement, or a personal condition. '
+    'Helpful votes mark the whole review as useful; '
     'they are not additional reviewers, agreement with each assertion, or votes '
     'specifically for the latest edit. Never infer consensus, player percentages, '
     'or factual truth from votes or weights, and do not sum duplicated votes. '
-    'Vote/date attribution can be supported by cited source metadata; substantive '
+    'High-vote/date attribution can be supported by cited source metadata; substantive '
     'claims must still be supported by the review text and required verbatim quotes.\n'
 )
 VERDICTS = ('supported', 'partially_supported', 'contradicted', 'unsupported')
@@ -54,7 +58,7 @@ ABSTENTION = 'The retrieved reviews do not provide sufficient evidence to answer
 
 
 ERROR_MESSAGES = {
-    'generation_error': '生成或评估失败，请查看错误阶段与配置。',
+    'generation_error': '生成失败，请查看错误阶段与配置。',
     'missing_key': '缺少 API Key。',
     'http_400': 'API 拒绝请求（400）：检查模型名称、参数和 JSON 模式支持。',
     'http_401': '认证失败（401）：检查密钥及其所属服务。',
@@ -76,7 +80,6 @@ ERROR_MESSAGES = {
     'invalid_claims': '模型未返回符合要求的 claims 列表，或观点数超过限制。',
     'invalid_verdict': '验证器返回的判定格式不符合要求。',
     'invalid_revision': '修订器未返回要求的 claim 字段。',
-    'invalid_judge': '最终评估模型返回的评分格式不符合要求。',
 }
 
 
@@ -96,10 +99,8 @@ def safe_error(error):
               'error_message': ERROR_MESSAGES[error.code]}
     if error.http_status is not None:
         result['http_status'] = error.http_status
-    if error.stage in ('generate', 'verify', 'revise', 'reverify', 'judge'):
+    if error.stage in ('generate', 'verify', 'revise', 'reverify'):
         result['error_stage'] = error.stage
-    if error.code == 'invalid_judge' and hasattr(error,'validation_issues'):
-        result['validation_issues'] = error.validation_issues
     return result
 
 
@@ -122,7 +123,7 @@ def build_context(hits, max_context_chars=24000, max_chunk_chars=4000, *,
     if context_policy == 'latest_update':
         as_of = context_time(as_of)
         hits = latest_review_hits(hits)
-    selected, seen = [], set()
+    selected, seen, review_ids = [], set(), []
     for hit in hits:
         if not isinstance(hit, dict):
             raise ValueError('Each hit must be an object')
@@ -145,9 +146,19 @@ def build_context(hits, max_context_chars=24000, max_chunk_chars=4000, *,
             if updated is not None: entry['updated_at_utc'] = updated.isoformat()
             entry['evidence_scope'] = meta['evidence_scope']
             entry.update(review_signals(meta, as_of))
+        if context_policy == 'latest_update':
+            # Reserve the final flag's serialized space before applying the budget.
+            entry['is_high_helpfulness'] = False
         if len(json.dumps(selected + [entry], ensure_ascii=False)) > max_context_chars:
             break
         selected.append(entry)
+        if context_policy == 'latest_update': review_ids.append(review_key(hit))
+    if context_policy == 'latest_update':
+        votes = {rid: entry['helpful_votes'] for rid, entry in zip(review_ids, selected)
+                 if 'helpful_votes' in entry}
+        threshold = high_helpfulness_threshold(votes.values())
+        for entry in selected:
+            entry['is_high_helpfulness'] = entry.get('helpful_votes', -1) >= threshold
     return selected
 
 
@@ -295,6 +306,7 @@ def generate_summary(query, hits, *, approach='verify_revise', model=None, clien
         result['context_evidence'] = context
         result['context_as_of_utc'] = clock.isoformat()
         result['review_weight_formula'] = 'helpful_votes / max(review_age_days, 1)'
+        result['high_helpfulness_rule'] = 'helpful_votes >= max(10, nearest_rank_75th_percentile_of_distinct_visible_reviews)'
     if fact_mode: result['selected_fact_ids'] = []
     transport = client
 

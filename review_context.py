@@ -73,6 +73,12 @@ def review_signals(meta, as_of):
     return signals
 
 
+def high_helpfulness_threshold(vote_counts):
+    """Nearest-rank upper quartile, with a floor of ten helpful votes."""
+    valid = sorted(v for v in vote_counts if type(v) is int and v >= 0)
+    return max(10, valid[math.ceil(.75 * len(valid)) - 1]) if valid else 10
+
+
 def review_key(hit):
     meta = hit['metadata']
     steam = re.match(r'^(steam:[^:]+:[^:]+):chunk:\d+$', hit['chunk_id'])

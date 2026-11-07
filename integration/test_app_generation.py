@@ -162,7 +162,7 @@ class AppGenerationTests(unittest.TestCase):
         self.assertEqual(payload['max_claims'], 4)
         self.assertNotIn('fact_candidates', payload)
         self.assertEqual(set(payload['evidence'][0]),
-                         {'chunk_id', 'text', 'game_name', 'source_url', 'evidence_scope'})
+                         {'chunk_id', 'text', 'game_name', 'source_url', 'evidence_scope', 'is_high_helpfulness'})
 
     def test_latest_update_is_used_by_live_app_and_saved_for_inspection(self):
         updated = copy.deepcopy(HITS)

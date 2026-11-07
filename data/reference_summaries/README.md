@@ -1,10 +1,12 @@
 # Bilingual Reference Summary Review
 
-This directory contains **100 assistant-drafted English reference summaries**, with Chinese translations of all questions, draft summaries, 193 claim explanations, and 19 priority-review notes. Drafts are based on each question's fixed review evidence and the existing query-specific scope annotations. A/B/C/D generated answers were not used to write them. No generation or translation API key was used.
+This directory contains **100 assistant-drafted English reference answers**, with Chinese translations of all questions, answers, 172 evidence-linked sentences, and 19 priority-review notes. Drafts are based on each question's fixed review evidence and the existing query-specific scope annotations. A/B/C/D generated answers were not used to write them. No generation or translation API key was used.
 
 All source records remain **pending human review**. They are not confirmed gold references, and ROUGE has not been computed from them. Original review evidence remains verbatim English; Chinese claim explanations are reading aids, not additional evidence.
 
-The vote-aware revision updates **54 claims across 48 questions** in both languages. When a point is attributed to a review with recorded helpful votes, the draft uses wording such as “A review with 224 helpful votes reports …” / “一条获 224 次有用投票的评论表示……”. Multiple reviews remain separate sources; votes are not counted as additional authors. Exact counts come from the saved benchmark's review metadata.
+All 100 answers have been rewritten as coherent paragraphs. They lead with the response to the question, merge repeated information, and connect benefits, limitations and disagreements. The evidence section maps each sentence back to its sources, rather than treating the answer as a sequence of review abstracts.
+
+Only relatively high-vote reviews receive wording such as “a highly upvoted review praises/criticizes …” / “一条高赞评论称赞／批评……”, where useful. The common rule is `helpful_votes >= max(10, nearest-rank 75th percentile of distinct context reviews)`. Exact counts remain in evidence details, not answer prose. Other evidence is synthesized without vote attribution. Fluency does not justify adding unsupported history, current popularity, recent improvements, new mod development, or unanimity.
 
 ## Files
 
@@ -13,7 +15,7 @@ The vote-aware revision updates **54 claims across 48 questions** in both langua
 - `drafts/reference_review.csv`: bilingual spreadsheet review sheet.
 - `drafts/review.md`: bilingual drafts and source evidence in Markdown.
 - `drafts/manifest.json`: source hashes, version metadata, counts, preparation method, and checks.
-- `drafts/attribution_revision.json`: before/after wording and the source review IDs and helpful vote counts behind each revised claim.
+- `drafts/synthesis_revision.json`: the active synthesis policy, high-vote rule and revision provenance.
 
 ## Review in Chinese
 
@@ -34,7 +36,7 @@ The page does not translate edits automatically or call an API. It keeps both la
 
 Nineteen questions are flagged for priority review. All 100 still require human confirmation. The evidence headings show recorded helpful votes; expand a review to see publication/update timestamps and its original text. Browser progress is saved locally; export a backup after each review session.
 
-Version `bilingual_votes_v3` restores English-only and `bilingual_v2` records while preserving personal edits, reviewer names, and notes. Unedited old text is replaced by the revised draft. Earlier approvals return to **pending** so the changed attribution can be checked again. Old records remain stored under their previous browser key. Imports from this version also check `review_metadata_sha256`.
+Version `bilingual_synthesis_v4` restores English-only, `bilingual_v2`, and `bilingual_votes_v3` records while preserving personal edits, reviewer names, and notes. Unedited old text is replaced by the revised answer. Earlier approvals return to **pending** so the rewritten answer can be checked again. Old records remain stored under their previous browser key. Imports from this version also check `review_metadata_sha256`.
 
 ## Export Fields
 
@@ -66,7 +68,7 @@ When importing translated records, `reference` is the translated English text, w
 
 These are 100 question-conditioned summary drafts, distinct from the 1,000 source review passages and their aspect labels. Approval should be based on evidence rather than agreement with a generation method. Keep scoring reference text free of inline citation IDs; provenance is stored separately.
 
-These drafts retain the original fixed review texts and their `context_sha256`; supplemental helpful-vote/date metadata is stored separately in `review_metadata` with its own hash. They do not change the archived fact-selection reference sets or reported scores. For a future ROUGE comparison using vote-aware references, provide the same review metadata to every generation method. Newest-update filtering requires its own matching references because this set preserves the full fixed review texts.
+These drafts retain the original fixed review texts and their `context_sha256`; supplemental helpful-vote/date metadata and high-vote flags are stored separately in `review_metadata` with its own hash. They do not change the archived fact-selection reference sets or reported scores. For a future ROUGE comparison using these references, provide the same review metadata to every generation method. Newest-update filtering requires its own matching references because this set preserves the full fixed review texts.
 
 ## Validation
 
