@@ -66,4 +66,20 @@ class DeepSeekTransportTests(unittest.TestCase):
             self.assertEqual(safe_error(caught.exception)['error_code'],code)
             self.assertNotIn('raw-secret',json.dumps(safe_error(caught.exception)))
 
+    def test_retry_after_is_parsed_without_exposing_headers(self):
+        for value,expected in [('7',7),('not-a-date',None),('-1',None),('nan',None)]:
+            error=HTTPError('https://example.com',429,'private',{'Retry-After':value},io.BytesIO(b'private'))
+            with patch('rag_generator.urlopen',side_effect=error):
+                with self.assertRaises(GenerationError) as caught:
+                    OpenAICompatibleClient(api_key='secret').complete([],'model')
+            self.assertEqual(caught.exception.retry_after_seconds,expected)
+            self.assertNotIn('private',json.dumps(safe_error(caught.exception)))
+
+    def test_malformed_api_choice_becomes_retryable_schema_error(self):
+        response=io.BytesIO(json.dumps({'choices':['bad']} ).encode())
+        with patch('rag_generator.urlopen',return_value=response):
+            with self.assertRaises(GenerationError) as caught:
+                OpenAICompatibleClient(api_key='secret').complete([],'model')
+        self.assertEqual(caught.exception.code,'response_schema')
+
 if __name__=='__main__':unittest.main()

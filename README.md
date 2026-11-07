@@ -18,6 +18,16 @@ The default settings are `https://api.deepseek.com` and `deepseek-v4-pro`, with 
 
 API keys remain in process memory and are excluded from result files and browser storage. Keep the terminal open while using the interface; press Ctrl+C to stop the server.
 
+## Concurrency and Retries
+
+The web interface defaults to 20 concurrent tasks and two extra attempts per task (at most three requests). Concurrency can be set from 1 to 500. Each task is one question/method/repetition; retries occupy the same worker slot. The actual number of in-flight requests cannot exceed the selected concurrency or the number of remaining tasks.
+
+Timeouts, network failures, HTTP 429/5xx responses, malformed JSON, invalid claims and invalid source IDs are retried using the same prompt and evidence. Backoff is 1 then 2 seconds, honoring a longer provider `Retry-After`. Valid empty `claims` is scored without retry. Authentication, balance and request-configuration errors stop new requests immediately. Other exhausted failures are recorded and remaining tasks continue.
+
+The page displays active requests, retry requests, completed tasks and final failures. Stop prevents new attempts and waits for in-flight requests to finish. Closing the page does not stop the server; persistent resume is not implemented.
+
+Each task is saved once with its attempt history. Per-task latency includes all attempts and retry waits. Input/output tokens and cost include all reported attempt usage; `observed_*` fields retain known usage when a failed request returns no usage. Run totals include exhausted failures. `run_summary.json` records wall time, throughput and request totals. No retry is selected using ROUGE or semantic scores.
+
 ## Generation Methods
 
 | Method | Few-shot demonstrations | Current evidence |
@@ -27,9 +37,11 @@ API keys remain in process memory and are excluded from result files and browser
 | Compression | None | Locally selected review sentences |
 | Few-shot + compression | Two fixed development examples | Locally selected review sentences |
 
-All four methods share the baseline prompt, source-citation schema, model, metadata reference time and output limit. Each question/method/repetition makes one independent generation call. There is no draft sharing, self-check, revision or evaluator call in this experiment.
+All four methods share the baseline prompt, source-citation schema, model, metadata reference time and output limit. Each question/method/repetition starts with one independent generation request; transient or invalid responses can be retried twice. There is no draft sharing, self-check, revision or evaluator call in this experiment.
 
 The examples teach coherent synthesis, preserving qualifications and contrasting experiences. They use development questions q06 and q24 and their reviewed English answers. The current question's reference answer is never sent to generation. Example IDs cannot be scored in either split.
+
+The API input presents these as separate `examples.case1` and `examples.case2` objects, each containing its own question, evidence and response. The stored example contents are unchanged; the current question and evidence follow as top-level fields.
 
 Context compression fits TF-IDF locally to the current review sentences and ranks them against the question. A greedy relevance/redundancy criterion uses weight 0.8 for relevance and 0.2 for similarity to selected sentences. It first attempts to retain each sentence's immediate neighbors, then the complete sentence if the window exceeds the budget. Source order, IDs, metadata and exact text are retained. Separate extracts are joined with a visible gap marker. The default budget is 60% of original review-text characters; one indivisible sentence may exceed that budget and is flagged. A ratio of 1 retains the original context exactly. No reference text, aspect label or model is used for compression.
 
@@ -256,7 +268,7 @@ The module's bundled benchmark data and archived experiment results remain insid
 Set `GENERATION_API_KEY` or `OPENAI_API_KEY` in your own terminal, then run:
 
 ```bash
-python run_generation_experiments.py --output experiments/runs/fewshot_compression_test --split test --limit 80 --compression-ratio 0.6 --repeats 1 --max-claims 4 --base-url https://api.deepseek.com --model deepseek-v4-pro
+python run_generation_experiments.py --output experiments/runs/fewshot_compression_test --split test --limit 80 --compression-ratio 0.6 --concurrency 20 --max-retries 2 --repeats 1 --max-claims 4 --base-url https://api.deepseek.com --model deepseek-v4-pro
 ```
 
 For a trial run, use `--limit 3`. For development, use `--split development --limit 18`. Use a new, empty output directory. API keys are read from the local environment and excluded from outputs.
@@ -265,7 +277,8 @@ The allowed experiment methods are `baseline`, `few_shot`, `compressed`, and `co
 
 Outputs include:
 
-- `generation_results.json` and `checkpoint.jsonl`: each answer, source citations, its reference answer, all nine ROUGE precision/recall/F1 scores, and execution metrics.
+- `generation_results.json` and `checkpoint.jsonl`: each final task outcome, attempt history, source citations, reference, nine ROUGE scores and execution metrics. Only the coordinator writes checkpoints.
+- `run_summary.json`: concurrency, retry limit, generation wall time, throughput and request totals, including exhausted failures.
 - `summary.csv`: macro means and valid counts for ROUGE-1/2/L, latency, model calls, tokens and optional cost estimates.
 - `report.md` and `report_data.json`: summary tables, five paired method comparisons with query-bootstrap confidence intervals, and the factorial interaction (combined − few-shot − compression + baseline). ROUGE, input tokens, latency and optional costs receive paired comparisons.
 - `evaluation_references.jsonl` and `input.jsonl`: the current scoring references and original cases.
@@ -326,6 +339,7 @@ A/B each completed 100 tasks; C/D each completed 99. See the saved outputs and [
 
 ```text
 rag_generator.py            Single-call generation, citations, optional examples/compression
+experiment_execution.py     Retry policy, backoff and per-attempt usage accounting
 review_context.py           Latest review updates and helpfulness/age signals
 prompts/                    Baseline and few-shot instructions
 context_compression.py      Local TF-IDF sentence selection and traceable spans

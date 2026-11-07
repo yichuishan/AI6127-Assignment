@@ -9,10 +9,14 @@ from pathlib import Path
 import random
 import statistics
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 
 from evaluate_generation import (EVALUATION_METHOD, F1_METRICS, REFERENCES, SCORING_CONFIG,
                                  jsonl, load_references, score_summary)
-from rag_generator import PROMPTS, OpenAICompatibleClient, build_context, generate_summary, safe_error
+from rag_generator import PROMPTS, GenerationError, OpenAICompatibleClient, build_context, generate_summary
+from experiment_execution import (EXECUTION_PROTOCOL, DEFAULT_CONCURRENCY, MAX_CONCURRENCY,
+    DEFAULT_RETRIES, FATAL_CODES, execute_with_retries)
 from generation_experiment_design import (APPROACHES, METHODS, EXPERIMENT_PROTOCOL,
     design_hashes, load_split, load_examples, select_cases, validate_cases)
 from context_compression import DEFAULT_RATIO, VERSION as COMPRESSION_VERSION, compress_context
@@ -28,6 +32,20 @@ def dump(path, value):
     temp = path.with_suffix(path.suffix+'.tmp')
     temp.write_text(json.dumps(value,ensure_ascii=False,indent=2), encoding='utf-8')
     temp.replace(path)
+
+
+def execution_totals(rows):
+    if not all('request_totals' in row for row in rows):return None
+    totals=[row['request_totals'] for row in rows]
+    result={'model_calls':sum(t['model_calls'] for t in totals),
+            'retry_count':sum(row['retry_count'] for row in rows)}
+    for key in ('prompt_tokens','completion_tokens','estimated_cost_usd'):
+        values=[t[key] for t in totals]
+        result[key]=sum(values) if values and all(v is not None for v in values) else None
+    for key in ('observed_prompt_tokens','observed_completion_tokens'):
+        known=[t[key] for t in totals if t[key] is not None]
+        result[key]=sum(known) if known else None
+    return result
 
 
 def benchmark(cases):
@@ -76,6 +94,14 @@ def aggregate(rows):
         for key in ('prompt_tokens','completion_tokens','estimated_cost_usd'):
             values = [r['metrics'].get(key) for r in valid]
             result['total_'+key] = sum(values) if values and all(v is not None for v in values) else None
+        all_calls=execution_totals(group)
+        if all_calls is not None:
+            result['total_api_calls']=all_calls['model_calls']
+            result['total_retries']=all_calls['retry_count']
+            for key in ('prompt_tokens','completion_tokens','estimated_cost_usd'):
+                result['total_'+key]=all_calls[key]
+            for key in ('observed_prompt_tokens','observed_completion_tokens'):
+                result['total_'+key]=all_calls[key]
         table.append(result)
     return sorted(table,key=lambda r:APPROACHES.index(r['approach']))
 
@@ -129,12 +155,13 @@ def interaction_effects(rows, bootstrap_samples=5000, seed=42):
     return effects
 
 
-def export(out,rows):
+def export(out,rows,execution=None):
     table = aggregate(rows); paired = paired_comparisons(rows); effects=interaction_effects(rows)
     dump(out/'generation_results.json',rows)
     dump(out/'report_data.json',{'evaluation_method':EVALUATION_METHOD,'scoring':SCORING_CONFIG,
         'reference_sha256':hashlib.sha256(REFERENCES.read_bytes()).hexdigest(),
         'experiment_protocol':EXPERIMENT_PROTOCOL,
+        'execution':execution,'request_totals':execution_totals(rows),
         'aggregates':table,'paired_comparisons':paired,'factorial_interactions':effects})
     fields = sorted({k for r in table for k in r})
     with (out/'summary.csv').open('w',newline='',encoding='utf-8') as file:
@@ -148,7 +175,8 @@ def export(out,rows):
         'Citation ID markers are removed; text is lowercased into English alphanumeric tokens without stemming.',
         'ROUGE-L uses whole-answer LCS. Scores in JSON/CSV are 0–1; this table shows F1 percentages.',
         'All nine precision/recall/F1 metrics and their valid counts are in summary.csv.',
-        'Each current method uses one independent generation call; no self-check or evaluator is used.','',
+        'Each method generates independently; transient or invalid responses may be retried. No self-check or evaluator is used.',
+        'Per-task latency includes retry attempts and backoff; token totals include all reported attempt usage.','',
         '| Method | Completed | Failed | ROUGE-1 F1 | ROUGE-2 F1 | ROUGE-L F1 | Input tokens | Latency s | Text retained |',
         '|---|---:|---:|---:|---:|---:|---:|---:|---:|']
     for r in table:
@@ -173,13 +201,26 @@ def export(out,rows):
             lines.append(f"| {p['metric']} | {p['n']} | {100*p['mean_interaction']:.3f} | [{100*lo:.3f}, {100*hi:.3f}] |")
     lines += ['','Bootstrap sampling uses questions as units, keeping repetitions together.',
               'The split, demonstrations, full and actual evidence, compression spans and settings are saved for each new run.']
+    if execution:
+        dump(out/'run_summary.json',dict(execution,request_totals=execution_totals(rows)))
+        lines += ['','## Execution','',f"Concurrency: {execution['concurrency']}; maximum retries: {execution['max_retries']}.",
+            f"Generation wall time: {execution['generation_wall_seconds']:.3f} s; completed answers/s: {execution['answers_per_second']:.3f}.",
+            'Each saved row contains all attempts and request totals, including exhausted failures.']
     (out/'report.md').write_text('\n'.join(lines)+'\n',encoding='utf-8')
     return table
 
 
 def run(cases,out,*,client,model,approaches=APPROACHES,repeats=1,max_claims=4,seed=42,
         input_price=None,output_price=None,config=None,progress=None,stop_requested=None,as_of=None,
-        split='test',compression_ratio=DEFAULT_RATIO):
+        split='test',compression_ratio=DEFAULT_RATIO,concurrency=DEFAULT_CONCURRENCY,
+        max_retries=DEFAULT_RETRIES,retry_backoff=1,activity=None):
+    wall_started=time.perf_counter()
+    if type(concurrency) is not int or not 1<=concurrency<=MAX_CONCURRENCY:
+        raise ValueError('Concurrency must be between 1 and 500')
+    if type(max_retries) is not int or not 0<=max_retries<=2:
+        raise ValueError('Maximum retries must be between 0 and 2')
+    if type(retry_backoff) not in (float,int) or not math.isfinite(retry_backoff) or not 0<=retry_backoff<=60:
+        raise ValueError('Invalid retry backoff')
     refs = benchmark(cases)
     validate_cases(cases,split)
     if type(compression_ratio) not in (float,int) or not math.isfinite(compression_ratio) or not .2<=compression_ratio<=1:
@@ -198,6 +239,8 @@ def run(cases,out,*,client,model,approaches=APPROACHES,repeats=1,max_claims=4,se
         raise ValueError('Use a new output directory')
     out.mkdir(parents=True,exist_ok=True)
     manifest = dict(config or {},evaluation_method=EVALUATION_METHOD,scoring=SCORING_CONFIG,
+        execution_protocol=EXECUTION_PROTOCOL,concurrency=concurrency,max_retries=max_retries,
+        retry_backoff_seconds=retry_backoff,
         experiment_protocol=EXPERIMENT_PROTOCOL,split=split,data_split=load_split(),
         design_hashes=design_hashes(),method_settings={a:METHODS[a] for a in approaches},
         compression={'version':COMPRESSION_VERSION,'ratio':compression_ratio},
@@ -209,7 +252,7 @@ def run(cases,out,*,client,model,approaches=APPROACHES,repeats=1,max_claims=4,se
         context_limits={'max_context_chars':24000,'max_chunk_chars':4000},
         prompt_hashes={p:hashlib.sha256((PROMPTS/p).read_bytes()).hexdigest() for p in ('baseline.txt','few_shot.txt')},
         data_hash=hashlib.sha256(json.dumps(cases,sort_keys=True,ensure_ascii=False).encode()).hexdigest(),
-        code_hashes={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in ('rag_generator.py','review_context.py','run_generation_experiments.py','evaluate_generation.py','context_compression.py','generation_experiment_design.py')},
+        code_hashes={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in ('rag_generator.py','review_context.py','run_generation_experiments.py','evaluate_generation.py','context_compression.py','generation_experiment_design.py','experiment_execution.py')},
         reference_sha256=hashlib.sha256(REFERENCES.read_bytes()).hexdigest())
     dump(out/'manifest.json',manifest)
     dump(out/'split.json',load_split())
@@ -218,53 +261,99 @@ def run(cases,out,*,client,model,approaches=APPROACHES,repeats=1,max_claims=4,se
         (out/name).write_text(''.join(json.dumps(r,ensure_ascii=False)+'\n' for r in items),encoding='utf-8')
     tasks = [(c,n,a) for c in cases for n in range(repeats) for a in approaches]
     random.Random(seed).shuffle(tasks)
-    rows = []
-    for case,repeat,arm in tasks:
-        if stop_requested and stop_requested():
-            break
-        row = {'case_id':case['id'],'repeat':repeat,'approach':arm,'status':'completed',
-               'experiment_protocol':EXPERIMENT_PROTOCOL,'split':split,
-               'evaluation_method':EVALUATION_METHOD,'reference_id':case['id'],
-               'reference':refs[case['id']]['reference'],'metrics':{}}
-        try:
-            started = time.perf_counter()
-            settings=METHODS[arm]
-            result = generate_summary(case['query'],case['results'],model=model,client=client,
+    rows=[];internal_stop=threading.Event();stop_reason=None
+
+    def stopped():
+        return internal_stop.is_set() or bool(stop_requested and stop_requested())
+
+    def worker(task):
+        case,repeat,arm=task
+        if stopped():return None
+        row={'case_id':case['id'],'repeat':repeat,'approach':arm,
+             'experiment_protocol':EXPERIMENT_PROTOCOL,'execution_protocol':EXECUTION_PROTOCOL,
+             'split':split,'evaluation_method':EVALUATION_METHOD,'reference_id':case['id'],
+             'reference':refs[case['id']]['reference'],'metrics':{}}
+        settings=METHODS[arm]
+
+        def on_activity(event):
+            if activity:activity(dict(event,case_id=case['id'],approach=arm,repeat=repeat))
+
+        def generate(transport):
+            result=generate_summary(case['query'],case['results'],model=model,client=transport,
                 max_claims=max_claims,input_cost_per_million=input_price,output_cost_per_million=output_price,
                 context_policy=BENCHMARK_CONTEXT_POLICY,include_review_metadata=True,as_of=clock,
                 few_shot_examples=examples if settings['few_shot'] else None,
                 compression_ratio=compression_ratio if settings['compression'] else None)
+            if result['validation']['rejected_claims']:
+                raise GenerationError('Invalid claim or source citation',code='invalid_citations',stage='generate')
             if result['approach']!=arm:
                 raise ValueError('Generation configuration differs from the selected experiment method')
-            result['experiment_protocol']=EXPERIMENT_PROTOCOL
-            full = build_context(case['results'],context_policy=BENCHMARK_CONTEXT_POLICY,
-                                 include_review_metadata=True,as_of=clock)
+            full=build_context(case['results'],context_policy=BENCHMARK_CONTEXT_POLICY,
+                               include_review_metadata=True,as_of=clock)
             expected=compress_context(case['query'],full,compression_ratio)[0] if settings['compression'] else full
-            actual=result['context_evidence']
-            if actual != expected:
+            if result['context_evidence']!=expected:
                 raise ValueError('Model evidence differs from deterministic context construction')
-            row['measured_execution_seconds'] = round(time.perf_counter()-started,6)
-            row['result'] = result
-            original_chars=sum(len(e['text']) for e in full)
-            context_chars=sum(len(e['text']) for e in actual)
-            metrics = score_summary(result['summary'],row['reference'],result['context_chunk_ids'])
-            metrics.update(latency_seconds=result['latency_seconds'],model_calls=len(result['stage_calls']),
-                prompt_tokens=result['usage'].get('prompt_tokens'),completion_tokens=result['usage'].get('completion_tokens'),
-                estimated_cost_usd=result['estimated_cost_usd'],final_claims=len(result['claims']),
+            result['experiment_protocol']=EXPERIMENT_PROTOCOL
+            return result
+
+        execution=execute_with_retries(generate,client,max_retries=max_retries,retry_backoff=retry_backoff,
+            stop_requested=stopped,activity=on_activity,input_price=input_price,output_price=output_price)
+        if execution is None:return None
+        row.update(execution)
+        row['measured_execution_seconds']=row['task_latency_seconds']
+        if row['status']=='completed':
+            result=row['result'];totals=row['request_totals']
+            original=result.get('original_context_evidence',result['context_evidence'])
+            original_chars=sum(len(e['text']) for e in original)
+            context_chars=sum(len(e['text']) for e in result['context_evidence'])
+            metrics=score_summary(result['summary'],row['reference'],result['context_chunk_ids'])
+            metrics.update(latency_seconds=row['task_latency_seconds'],model_calls=totals['model_calls'],
+                prompt_tokens=totals['prompt_tokens'],completion_tokens=totals['completion_tokens'],
+                estimated_cost_usd=totals['estimated_cost_usd'],final_claims=len(result['claims']),
                 provenance_rejected=result['validation']['rejected_claims'],
                 context_preparation_seconds=result['context_preparation_seconds'],
                 original_context_text_chars=original_chars,context_text_chars=context_chars,
                 context_text_ratio=context_chars/original_chars if original_chars else 0,
-                context_chunks=len(actual))
-            row['metrics'] = metrics
-        except Exception as error:
-            row.update(status='failed',**safe_error(error))
-        with (out/'checkpoint.jsonl').open('a',encoding='utf-8') as file:
-            file.write(json.dumps(row,ensure_ascii=False)+'\n')
-        rows.append(row)
-        if progress:
-            progress(row,len(rows),len(tasks))
-    export(out,rows)
+                context_chunks=len(result['context_evidence']),attempt_count=row['attempt_count'],
+                retry_count=row['retry_count'])
+            row['metrics']=metrics
+        return row
+
+    # At most `concurrency` unfinished tasks exist. Only the coordinator writes
+    # checkpoints and emits final progress, so concurrent workers cannot interleave JSONL.
+    iterator=iter(tasks)
+    with ThreadPoolExecutor(max_workers=min(concurrency,len(tasks)),thread_name_prefix='generation') as pool:
+        pending=set()
+
+        def fill():
+            while not stopped() and len(pending)<concurrency:
+                task=next(iterator,None)
+                if task is None:break
+                pending.add(pool.submit(worker,task))
+
+        fill()
+        with (out/'checkpoint.jsonl').open('a',encoding='utf-8') as checkpoint:
+            while pending:
+                done,_=wait(pending,timeout=.1,return_when=FIRST_COMPLETED)
+                for future in done:
+                    pending.remove(future)
+                    row=future.result()
+                    if row is None:continue
+                    checkpoint.write(json.dumps(row,ensure_ascii=False)+'\n');checkpoint.flush()
+                    rows.append(row)
+                    if row.get('error_code') in FATAL_CODES:
+                        internal_stop.set()
+                        stop_reason=row['error_message']
+                        if activity:activity({'type':'fatal',**{k:row[k] for k in ('case_id','approach','error_code','error_message')}})
+                    if progress:progress(row,len(rows),len(tasks))
+                fill()
+    elapsed=time.perf_counter()-wall_started
+    execution={'execution_protocol':EXECUTION_PROTOCOL,'concurrency':concurrency,'max_retries':max_retries,
+        'planned_tasks':len(tasks),'recorded_tasks':len(rows),'completed':sum(r['status']=='completed' for r in rows),
+        'failed':sum(r['status']=='failed' for r in rows),'stopped':stopped(),'stop_reason':stop_reason,
+        'generation_wall_seconds':elapsed,
+        'answers_per_second':sum(r['status']=='completed' for r in rows)/elapsed if elapsed else 0}
+    export(out,rows,execution=execution)
     return rows
 
 
@@ -275,6 +364,8 @@ def main():
     parser.add_argument('--limit',type=int,default=3);parser.add_argument('--repeats',type=int,default=1)
     parser.add_argument('--split',choices=('test','development'),default='test')
     parser.add_argument('--compression-ratio',type=float,default=DEFAULT_RATIO)
+    parser.add_argument('--concurrency',type=int,default=DEFAULT_CONCURRENCY)
+    parser.add_argument('--max-retries',type=int,default=DEFAULT_RETRIES,help='Extra attempts after the first request (0 to 2)')
     parser.add_argument('--max-claims',type=int,default=4);parser.add_argument('--seed',type=int,default=42)
     parser.add_argument('--approaches',nargs='+',choices=APPROACHES,default=APPROACHES)
     parser.add_argument('--timeout',type=int,default=180);parser.add_argument('--max-output-tokens',type=int,default=8192)
@@ -291,6 +382,7 @@ def main():
     run(cases[:args.limit],args.output,client=client,model=args.model,approaches=args.approaches,
         repeats=args.repeats,max_claims=args.max_claims,seed=args.seed,input_price=args.input_price,
         output_price=args.output_price,as_of=args.as_of,split=args.split,compression_ratio=args.compression_ratio,
+        concurrency=args.concurrency,max_retries=args.max_retries,
         config={k:getattr(args,k) for k in ('base_url','timeout','max_output_tokens','thinking')})
 
 

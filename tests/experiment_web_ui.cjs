@@ -17,7 +17,7 @@ class Element {
 }
 const elements = new Map([...html.matchAll(/\bid="([^"]+)"/g)].map(m=>[m[1],new Element()]));
 const get = id => {assert.ok(elements.has(id),'Missing HTML ID: '+id);return elements.get(id);};
-for(const [id,value] of Object.entries({limit:'3',split:'test','compression-ratio':'0.6',repeats:'1','max-claims':'4','base-url':'https://api.deepseek.com',
+for(const [id,value] of Object.entries({limit:'3',concurrency:'20','max-retries':'2',split:'test','compression-ratio':'0.6',repeats:'1','max-claims':'4','base-url':'https://api.deepseek.com',
  model:'deepseek-v4-pro',thinking:'auto','max-output-tokens':'8192',timeout:'180'})) get(id).value=value;
 const arms=['baseline','few_shot','compressed','combined'].map(value=>({value}));
 const requests=[];
@@ -26,7 +26,7 @@ const job={id:'fixture',split:'test',compression_ratio:.6,model:'scripted',statu
  metrics:{rouge1_f1:.5,rouge2_f1:.25,rougeL_f1:.4,prompt_tokens:123,latency_seconds:1.25,context_text_ratio:.6},summary:'Generated answer.',reference:'Reviewed reference answer.'}],
  aggregates:[{approach:'baseline',rouge1_f1:.5,rouge2_f1:.25,rougeL_f1:.4,prompt_tokens:123,latency_seconds:1.25,context_text_ratio:.6}]};
 const ctx=vm.createContext({document:{getElementById:get,querySelectorAll:()=>arms,createElement:()=>new Element(),createTextNode:text=>({textContent:text})},
- fetch:async(url,config)=>{requests.push({url,config});return {ok:true,json:async()=>url==='/api/info'?{cases:100,reference_count:100,experiment_protocol:'fewshot_compression_2x2_v1',splits:{test:80,development:18},development_total:20,example_ids:['q06','q24'],evaluation_method:'rouge_1_2_l_human_references_v1',dataset_status:'Fixed references',jobs:[]}:job};},
+ fetch:async(url,config)=>{requests.push({url,config});return {ok:true,json:async()=>url==='/api/info'?{cases:100,reference_count:100,experiment_protocol:'fewshot_compression_2x2_v1',execution_protocol:'concurrent_retry_v1',splits:{test:80,development:18},development_total:20,example_ids:['q06','q24'],evaluation_method:'rouge_1_2_l_human_references_v1',dataset_status:'Fixed references',jobs:[]}:job};},
  setTimeout:()=>1,clearTimeout(){},Date,console});
 const run=s=>vm.runInContext(s,ctx);
 const text=e=>e.textContent+' '+e.children.map(text).join(' ');
@@ -51,6 +51,9 @@ async function main(){
  assert.equal(submitted.api_key,'temporary-fixture-key');
  assert.equal(submitted.experiment_protocol,'fewshot_compression_2x2_v1');
  assert.equal(submitted.split,'test');
+ assert.equal(submitted.execution_protocol,'concurrent_retry_v1');
+ assert.equal(submitted.concurrency,20);
+ assert.equal(submitted.max_retries,2);
  assert.equal(submitted.compression_ratio,.6);
  assert.deepEqual(submitted.approaches,['baseline','few_shot','compressed','combined']);
  assert.equal(submitted.evaluation_method,'rouge_1_2_l_human_references_v1');

@@ -19,13 +19,10 @@ from generation_experiment_design import (APPROACHES, EXPERIMENT_PROTOCOL, load_
 from context_compression import DEFAULT_RATIO
 from run_generation_experiments import jsonl, run, benchmark, aggregate
 from evaluate_generation import EVALUATION_METHOD, load_references
+from experiment_execution import EXECUTION_PROTOCOL, DEFAULT_CONCURRENCY, DEFAULT_RETRIES, MAX_CONCURRENCY
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DATASET = ROOT / 'experiments/steam_generation_eval.jsonl'
-
-
-class Cancelled(Exception):
-    pass
 
 
 def endpoint(value):
@@ -65,14 +62,16 @@ class LiveClient:
 
     def complete(self, messages, model, temperature):
         job = self.job
-        if job.stop.is_set():
-            raise Cancelled()
         with job.lock:
-            job.state.update(stage='基于评论生成总结', api_calls=job.state['api_calls'] + 1)
-        response = self.transport.complete(messages, model, temperature)
-        with job.lock:
-            job.state['successful_api_calls'] += 1
-        return response
+            job.state.update(stage='并发生成总结', api_calls=job.state['api_calls'] + 1,
+                             active_requests=job.state['active_requests']+1)
+            job.state['peak_active_requests']=max(job.state['peak_active_requests'],job.state['active_requests'])
+        try:
+            response = self.transport.complete(messages, model, temperature)
+            with job.lock:job.state['successful_api_calls'] += 1
+            return response
+        finally:
+            with job.lock:job.state['active_requests'] -= 1
 
 
 class Job:
@@ -81,6 +80,9 @@ class Job:
         self.lock, self.stop = threading.Lock(), threading.Event()
         self.state = {'id': directory.name, 'status': 'running', 'completed': 0, 'total': 0,
                       'experiment_protocol':EXPERIMENT_PROTOCOL,'split':data['split'],
+                      'execution_protocol':EXECUTION_PROTOCOL,'concurrency':data['concurrency'],
+                      'max_retries':data['max_retries'],'retry_requests':0,
+                      'active_requests':0,'peak_active_requests':0,
                       'compression_ratio':data['compression_ratio'],'model':data['model'],
                       'failed': 0, 'scored':0, 'aggregates':[], 'api_calls': 0, 'successful_api_calls': 0,
                       'stage': '准备输入', 'events': [], 'started_at': time.time()}
@@ -96,9 +98,20 @@ class Job:
             (self.directory/'input.jsonl').write_text(''.join(json.dumps(c,ensure_ascii=False)+'\n' for c in cases),encoding='utf-8')
             with self.lock:
                 self.state['total'] = len(cases)*data['repeats']*len(data['approaches'])
-            def progress(row, completed, total):
+            finished_rows=[]
+            def activity(event):
                 with self.lock:
-                    self.state.update(completed=completed,total=total,stage='ROUGE 评分完成')
+                    if event['type']=='retry_started':self.state['retry_requests'] += 1
+                    elif event['type']=='retry_wait':
+                        self.state['stage']=f"{event['case_id']} · 准备第 {event['next_attempt']} 次请求"
+                    elif event['type']=='fatal':
+                        self.state['stop_reason']='配置或账户错误，已停止新请求：'+event['error_message']
+                        self.stop.set()
+            def progress(row, completed, total):
+                finished_rows.append(row)
+                with self.lock:
+                    self.state.update(completed=completed,total=total,stage='任务完成，继续处理并发请求',
+                                      aggregates=aggregate(finished_rows))
                     self.state['failed'] += row['status']=='failed'
                     self.state['scored'] += row['status']=='completed'
                     self.state['events'].append({'case_id':row['case_id'],'approach':row['approach'],
@@ -106,18 +119,17 @@ class Job:
                         'error_message':row.get('error_message'),'error_code':row.get('error_code'),
                         'http_status':row.get('http_status'),'error_stage':row.get('error_stage'),
                         'metrics':row['metrics'],
+                        'attempt_count':row['attempt_count'],'retry_count':row['retry_count'],
                         'reference':row.get('reference',''),
                         'summary':row.get('result',{}).get('summary','')[:1800]})
                     self.state['events']=self.state['events'][-30:]
-                    if len(self.state['events'])>=3 and all(e['status']=='failed' for e in self.state['events'][-3:]):
-                        self.state['stop_reason']='连续 3 项失败，已停止；请检查生成配置与输出格式。'
-                        self.stop.set()
             public_config={k:data[k] for k in ('base_url','max_output_tokens','thinking','timeout','input_price','output_price')}
             rows=run(cases,self.directory/'results',client=client,model=data['model'],
                 approaches=data['approaches'],repeats=data['repeats'],max_claims=data['max_claims'],
                 input_price=data['input_price'],output_price=data['output_price'],config=public_config,
                 progress=progress,stop_requested=self.stop.is_set,
-                split=data['split'],compression_ratio=data['compression_ratio'])
+                split=data['split'],compression_ratio=data['compression_ratio'],
+                concurrency=data['concurrency'],max_retries=data['max_retries'],activity=activity)
             with self.lock:
                 self.state.update(status='stopped' if self.stop.is_set() else 'completed',
                     stage='已停止' if self.stop.is_set() else 'ROUGE 总结实验结束',aggregates=aggregate(rows))
@@ -142,12 +154,14 @@ class Application:
     def start(self, owner, data):
         allowed={'api_key','base_url','model','repeats','max_output_tokens','timeout','thinking',
                  'max_claims','limit','approaches','input_price','output_price','dataset_jsonl','evaluation_method',
-                 'experiment_protocol','split','compression_ratio'}
+                 'experiment_protocol','split','compression_ratio','concurrency','max_retries','execution_protocol'}
         if set(data)-allowed:raise ValueError('Unsupported experiment option')
         if data.get('evaluation_method',EVALUATION_METHOD)!=EVALUATION_METHOD:
             raise ValueError('评测版本不匹配，请重启服务并刷新网页。')
         if data.get('experiment_protocol')!=EXPERIMENT_PROTOCOL:
             raise ValueError('实验已改为少样本提示 × 上下文压缩，请重启服务并刷新网页。')
+        if data.get('execution_protocol')!=EXECUTION_PROTOCOL:
+            raise ValueError('并发与重试版本不匹配，请重启服务并刷新网页。')
         key=data.get('api_key','')
         if not isinstance(key,str) or not key.strip() or len(key)>4096:raise ValueError('请输入 API Key。')
         data['api_key']=key.strip();data['base_url']=endpoint(data.get('base_url',''))
@@ -155,6 +169,8 @@ class Application:
         if not isinstance(model,str) or not model.strip() or len(model)>200:raise ValueError('模型名称无效。')
         data['model']=model.strip()
         data['repeats']=integer(data.get('repeats',1),1,5)
+        data['concurrency']=integer(data.get('concurrency',DEFAULT_CONCURRENCY),1,MAX_CONCURRENCY)
+        data['max_retries']=integer(data.get('max_retries',DEFAULT_RETRIES),0,2)
         data['max_output_tokens']=integer(data.get('max_output_tokens',8192),256,131072)
         data['timeout']=integer(data.get('timeout',180),10,600)
         data['thinking']=data.get('thinking','auto')
@@ -243,6 +259,7 @@ def server(host='127.0.0.1', port=8080, application=None):
                 split=load_split()
                 return self.send(200, {'cases': len(cases), 'reference_count':len(refs),
                     'experiment_protocol':EXPERIMENT_PROTOCOL,
+                    'execution_protocol':EXECUTION_PROTOCOL,'max_concurrency':MAX_CONCURRENCY,
                     'splits':{'test':len(split['test_ids']),'development':len(split['development_ids'])-len(split['example_ids'])},
                     'development_total':len(split['development_ids']),'example_ids':split['example_ids'],
                     'evaluation_method':EVALUATION_METHOD,'reference_version':next(iter(refs.values()))['dataset_revision'],
@@ -293,7 +310,7 @@ def server(host='127.0.0.1', port=8080, application=None):
                     if not job or job.owner != owner:
                         return self.send(404, {'error': '任务不存在。'})
                     job.stop.set()
-                    return self.send(200, {'message': '停止已请求；正在执行的 API 请求结束后停止。'})
+                    return self.send(200, {'message': '停止已请求；不再发起新请求，当前并发请求结束后保存结果。'})
                 self.send(404, {'error': '未找到。'})
             except (ValueError, KeyError, TypeError):
                 # Validation errors are intentionally generic: never echo user inputs/keys.
