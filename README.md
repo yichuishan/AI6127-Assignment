@@ -1,8 +1,8 @@
 # AI6127: Evidence-grounded Review Summarization
 
-Final experiment code for comparing four RAG summarization methods with fixed retrieved evidence and deterministic fact-ID evaluation against references refined through human review.
+Experiment code for comparing four RAG summarization methods using ROUGE-1, ROUGE-2 and ROUGE-L against 100 finalized, human-reviewed English reference answers.
 
-Requires **Python 3.10+**. The project uses only the Python standard library; no evaluator model or third-party Python packages are required.
+Requires **Python 3.10+**. Generation and ROUGE scoring use only the Python standard library; no evaluator model or third-party runtime packages are required.
 
 Unless stated otherwise, run commands from the directory containing this README. In the group repository, that directory is `code/generation/rag_summary/`. The integration examples below explicitly run from `code/`.
 
@@ -22,12 +22,12 @@ API keys remain in process memory and are excluded from result files and browser
 
 | Method | Workflow |
 |---|---|
-| A · Baseline | Generate claims with source citations and fact IDs |
+| A · Baseline | Generate a coherent answer with source citations |
 | B · Evidence quotes | Strengthen the evidence instructions and require validated verbatim quotes |
 | C · Verify-delete | Start from B's draft, check each claim, and delete claims that fail verification |
 | D · Verify-revise | Start from B's draft, repair claims that fail verification, and check the revisions again |
 
-B/C/D share the initial draft. C/D use the generation model for self-checking; final scoring uses the same deterministic algorithm for every method, with no separate evaluator model.
+B/C/D share the initial draft. C/D use the generation model for self-checking. Final scoring compares the English answer text with its reviewed reference using ROUGE; there is no separate evaluator model or fact-ID selection task.
 
 The generation interface is provided by `rag_generator.py`:
 
@@ -43,7 +43,7 @@ result = generate_summary(
 )
 ```
 
-Each entry in `ranked_passages` requires `chunk_id` and `text`, with optional `game_name` and `source_url` fields inside `metadata`. For structured experiments, the runner adds eight aspect candidates per review without presence or sentiment labels. Reference answers and human sentiment labels are excluded from model inputs.
+Each entry in `ranked_passages` requires `chunk_id` and `text`, with optional `game_name` and `source_url` fields inside `metadata`. The ROUGE runner sends the question, review evidence and source metadata. It sends neither fact candidates nor human reference answers. Reference answers are loaded only by the local scorer.
 
 ### Latest Review Updates
 
@@ -53,7 +53,7 @@ When a review contains explicit substantive `Edit:` or `Update:` blocks, only it
 
 For example, the Solar Crown review's final February 2026 update is provided without its earlier RTX 3070/60 FPS description. Conditions remaining in the selected update are preserved. Original stored reviews and citation IDs are unchanged. The same filtered evidence is used for generation, quote validation, verification, and revision. Available creation/update timestamps accompany the evidence; outputs record `context_policy` and the actual `context_evidence` for inspection. This uses the latest review content available in the retrieved hits.
 
-To explicitly use full reviews, pass `context_policy="full_review"` or the CLI option `--context-policy full_review`. The fixed 100-question experiment, including the experiment web interface, uses `full_review` to match its existing reference annotations and reproduce the reported results. Evaluating the new policy requires reference summaries and fact labels for the filtered evidence.
+To explicitly use full reviews, pass `context_policy="full_review"` or the CLI option `--context-policy full_review`. The ROUGE experiment uses `full_review` with `include_review_metadata=True`: it retains the complete fixed text while supplying the helpful-vote/date fields used by the reference writers. This matches the 100 approved reference answers. Latest-update filtering requires matching reference review before scoring.
 
 ### Helpfulness and Publication Age
 
@@ -107,7 +107,7 @@ The return value includes:
 - `context_policy` and, for live latest-update generation, `context_evidence`: the evidence policy and selected model input.
 - `context_as_of_utc` and `review_weight_formula`: the reference time and formula for live helpfulness weights.
 
-For live retrieval, omit `fact_candidates`. Original chunk IDs provide citations for any retrieved review. The fixed-benchmark runner supplies its own fact catalog when running the structured evaluation.
+Live retrieval and the ROUGE benchmark both omit `fact_candidates`. Original chunk IDs remain available for source citations and exact-quote checks. They are removed from the answer text before ROUGE scoring.
 
 ### API Configuration
 
@@ -243,60 +243,76 @@ hits = Reranker().rerank(query, fused, top_k=5)
 
 ### Live Answers and Benchmark Evaluation
 
-The integration above generates answers from the current retrieval results. The experiment web interface launched by `launch_web.py` runs the fixed 100-question benchmark with its saved evidence and reference sets. Its upload option accepts unchanged benchmark subsets. New questions or different retrieved passages require corresponding references before fact-selection metrics can be computed.
+The integration above generates answers from the current retrieval results. The experiment web interface launched by `launch_web.py` runs the fixed 100-question benchmark with its saved evidence and approved English references. Its upload option accepts unchanged benchmark subsets. New questions or different retrieved passages require matching references before ROUGE comparison.
 
 The module's bundled benchmark data and final experiment results remain inside `rag_summary/` for reproduction. Live group-app outputs use the shared `GENERATION_RESULTS_DIR` path shown above.
 
-## Command-line Experiments
+## Command-line ROUGE Experiments
 
-Set `GENERATION_API_KEY` in your own terminal, then run:
-
-```bash
-python run_fact_experiments.py --output experiments/runs/full --limit 100 --repeats 1 --max-claims 4 --base-url https://api.deepseek.com --model deepseek-v4-pro
-```
-
-For a trial run, replace `--limit 100` with `--limit 3`. Use a new, empty output directory.
-
-Outputs include complete generation results, per-task checkpoints, predicted IDs, the reference sets used, CSV metrics, summaries, and configuration hashes.
-
-## Recompute Scores Without API Calls
-
-Rescore a downloaded experiment ZIP:
+Set `GENERATION_API_KEY` or `OPENAI_API_KEY` in your own terminal, then run:
 
 ```bash
-python recompute_results.py generation-experiment.zip --output experiments/runs/rescored
+python run_generation_experiments.py --output experiments/runs/rouge_full --limit 100 --repeats 1 --max-claims 4 --base-url https://api.deepseek.com --model deepseek-v4-pro
 ```
 
-Reproduce the report results without an API key:
+For a trial run, replace `--limit 100` with `--limit 3`. Use a new, empty output directory. API keys are read from the local environment and excluded from outputs.
+
+The older `run_fact_experiments.py` command now delegates to this ROUGE runner by default. A/B/C/D generate summaries without `fact_ids`; C/D still perform their self-checks using the generation model.
+
+Outputs include:
+
+- `generation_results.json` and `checkpoint.jsonl`: each answer, source citations, its reference answer, all nine ROUGE precision/recall/F1 scores, and execution metrics.
+- `summary.csv`: macro means and valid counts for ROUGE-1/2/L, latency, model calls, tokens and optional cost estimates.
+- `report.md` and `report_data.json`: summary tables and paired query-bootstrap comparisons.
+- `evaluation_references.jsonl` and `input.jsonl`: the exact approved references and input cases used.
+- `manifest.json`: scoring options, one shared metadata reference time, and source/prompt/code hashes.
+
+The web interface runs this same workflow and includes these files in its results ZIP.
+
+## ROUGE Scoring
+
+The scorer uses the 100 English answers in `data/reference_summaries/reviewed/approved_references.jsonl`. Each must be marked human-reviewed and match the question and evidence revision.
+
+| Metric | Comparison |
+|---|---|
+| ROUGE-1 | Overlap of word-token counts |
+| ROUGE-2 | Overlap of consecutive token-pair counts |
+| ROUGE-L | Longest common subsequence of the complete answer and reference |
+
+Source-ID citation markers are removed before scoring. Tokenization lowercases text and keeps ASCII English letter/digit tokens, without stemming. This matches the default tokenizer of Google's `rouge-score` with `use_stemmer=False`. ROUGE-L is whole-answer LCS, not ROUGE-Lsum. The dependency-free implementation has been cross-checked against `rouge-score==0.1.2` on 506 text pairs, covering all nine scores.
+
+Scores in JSON and CSV are between 0 and 1. The web page and Markdown report show F1 as percentages. Aggregation takes the mean of completed-answer scores; failed requests are recorded separately. Each completed answer, including an abstention, is scored from its actual text. Repetitions remain grouped by question in bootstrap comparisons.
+
+The benchmark keeps each question's full fixed context and passes its recorded helpful-vote/date metadata. Model input does not contain reference text, reference evidence IDs, fact candidates, sentiment labels or scoring targets. A subset upload must preserve the original question, passages, order and metadata. New questions or changed evidence need matching references.
+
+## Recompute ROUGE Without API Calls
+
+Score a downloaded experiment ZIP, results directory, or saved result JSON:
 
 ```bash
-python recompute_results.py experiments/final/generation_results.json --output experiments/runs/report_reproduction
+python evaluate_generation.py generation-experiment.zip --output experiments/runs/rouge_rescored
 ```
 
-Score a prediction JSONL file directly:
+`python recompute_results.py ...` is also a ROUGE rescoring entry point by default. Full-context archived outputs can be rescored without regenerating them; existing metrics are retained under `previous_metrics` when appropriate. Original result files are never overwritten.
+
+## Data and Historical Fact-ID Evaluation
+
+- `data/reference_summaries/reviewed/approved_references.jsonl`: 100 approved English reference answers for current ROUGE scoring.
+- `experiments/steam_generation_eval.jsonl`: 100 fixed questions, each with ten saved annotated review passages from `hybrid_rerank` rankings.
+- `data/generation_annotations/`: the original 1,000 annotated passages, 2,898 review–aspect facts and historical fact-selection targets.
+- `data/generation_annotations/human_review.json`: 40 query-specific decisions used in the earlier fact-selection study.
+
+Historical Precision/Recall/F1, coverage-unit recall and polarity-contrast scores remain available for the report. They are separate from the current ROUGE results. Reproduce those saved scores explicitly with:
 
 ```bash
-python evaluate_fact_selection.py experiments/final/predictions.jsonl --output experiments/runs/prediction_metrics.json
+python recompute_results.py experiments/final/generation_results.json --legacy-facts --output experiments/runs/fact_report_reproduction
 ```
 
-Each prediction line contains `id` and `selected_fact_ids`, with optional `approach`, `repeat`, and `summary` fields. The scripts use the final reference sets included in this repository.
+`evaluate_fact_selection.py` and the `--legacy-facts` runner option are retained for this historical protocol. The web interface always uses ROUGE.
 
-## Data and Scoring
+## Archived Fact-selection Results
 
-- `data/reference_summaries/reviewed/approved_references.jsonl`: 100 human-reviewed English summary references, including two translated Chinese edits. These answer-level references are ready for ROUGE evaluation and are separate from the fact-ID labels below.
-- `experiments/steam_generation_eval.jsonl`: 100 fixed questions, each with up to ten annotated review passages from saved `hybrid_rerank` rankings.
-- `data/generation_annotations/`: 1,000 annotated source passages, 2,898 review–aspect facts, and the final reference sets.
-- `data/generation_annotations/human_review.json`: 40 user-adjudicated decisions across 16 questions, comprising 22 core facts, seven optional background facts, and 11 excluded facts.
-
-Core facts belong to the required reference set. Optional background facts are neither required for coverage nor penalized as incorrect selections. Excluded facts count as incorrect when selected. Items outside this review retain the original annotation-matching rules.
-
-Metrics include fact-selection Precision/Recall/F1, coverage-unit recall, polarity-contrast coverage, execution time, model calls, and token usage. Coverage units group facts by game, aspect, and sentiment. The final references contain 591 required query–fact pairs, 238 coverage units, and 27 positive/negative contrast groups across 24 questions. Condition retention is not scored because the corresponding human annotations are unavailable.
-
-These metrics evaluate structured fact selection. See the [data documentation](data/generation_annotations/README.md) for sources, fields, and scoring rules. The web interface accepts subsets of the original benchmark with unchanged questions and evidence.
-
-## Final Experiment Results
-
-`experiments/final/` contains the actual generation outputs and revised scores used in the report. Scores below are percentages macro-averaged across applicable questions:
+`experiments/final/` preserves the earlier generation outputs and fact-selection scores used in the report. The values below are historical fact-ID scores, not ROUGE:
 
 | Method | Precision | Recall | F1 | Unit recall | Contrast coverage |
 |---|---:|---:|---:|---:|---:|
@@ -312,14 +328,17 @@ A/B each completed 100 tasks; C/D each completed 99. See the saved outputs and [
 ```text
 rag_generator.py            Generation, citation validation, self-checking, and revision
 review_context.py           Latest review updates and helpfulness/age signals
-prompts/                    A/B, fact-selection, verification, and revision prompts
-run_fact_experiments.py      Fixed-benchmark experiment runner
+prompts/                    Generation, verification, revision and historical fact prompts
+run_generation_experiments.py Current ROUGE experiment runner
+evaluate_generation.py      Deterministic ROUGE scorer and offline result evaluation
+run_fact_experiments.py      Compatibility entry; historical protocol with --legacy-facts
 experiment_web.py            Web backend, progress tracking, and ZIP export
 launch_web.py                Local launch entry point
 web/                        Web frontend
-evaluate_fact_selection.py  Shared deterministic scorer
-recompute_results.py        Offline rescoring of saved outputs
-data/generation_annotations/ Final data and human review records
+evaluate_fact_selection.py  Archived fact-ID scorer
+recompute_results.py        ROUGE rescoring; historical scores with --legacy-facts
+data/reference_summaries/   Drafts and finalized human-reviewed English answers
+data/generation_annotations/ Original annotations and historical scoring references
 experiments/                Fixed inputs, source audit, and final results
 tests/                      Generation, scoring, web, and reproduction tests
 ```
@@ -330,4 +349,11 @@ tests/                      Generation, scoring, web, and reproduction tests
 python -m unittest discover -s tests -v
 ```
 
-Tests use scripted models and saved final outputs; they do not call paid APIs.
+Tests use scripted models and saved outputs; they do not call paid APIs. Optional frontend checks:
+
+```bash
+node tests/experiment_web_ui.cjs
+node tests/reference_review_ui.cjs
+```
+
+`tests/validate_rouge_against_reference.py` reproduces the optional cross-check when `rouge-score==0.1.2` is installed in a separate test environment. This package is not needed to run generation or scoring.

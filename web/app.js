@@ -28,31 +28,31 @@ function render(job){
  $('start').textContent=running?'实验运行中…':'开始新实验 ↗';
  $('download').classList.toggle('disabled',running);$('download').setAttribute('aria-disabled',String(running));
  if(!running)$('download').href=`/api/jobs/${job.id}/download`;
+ $('events').replaceChildren();
  if(job.events.length){
-  $('events').replaceChildren();
   [...job.events].reverse().forEach(event=>{
    const article=document.createElement('article');article.className='event'+(event.status==='failed'?' error':'');
    const head=document.createElement('div');head.className='event-head';
    const b=document.createElement('b');b.textContent=names[event.approach];
    const id=document.createElement('small');id.textContent=event.case_id;
-   const status=document.createElement('span');status.textContent=event.status==='failed'?`失败 · ${event.error_type}`:'✓ 算法评分完成';
+   const status=document.createElement('span');status.textContent=event.status==='failed'?`失败 · ${event.error_type}`:'✓ ROUGE 评分完成';
    head.append(b,id,status);article.append(head);
    const add=text=>{const p=document.createElement('p');p.textContent=text;article.append(p);};
    if(event.error_message)add(`${event.error_stage||'generation'} · ${event.error_code||''}：${event.error_message}`);
    if(event.status==='completed'){
-    const m=event.metrics;add(`P ${rate(m.fact_selection_precision)} · R ${rate(m.fact_selection_recall)} · F1 ${rate(m.fact_selection_f1)} · 单元覆盖 ${rate(m.coverage_unit_recall)} · 正负覆盖 ${rate(m.polarity_contrast_coverage)}`);
-    add(`事实 ID：${event.selected_fact_ids.join(', ')||'空选择'}`);
+    const m=event.metrics;add(`ROUGE-1 F1 ${rate(m.rouge1_f1)} · ROUGE-2 F1 ${rate(m.rouge2_f1)} · ROUGE-L F1 ${rate(m.rougeL_f1)}`);
    }
    if(event.summary)add(event.summary);
+   if(event.reference){const details=document.createElement('details'),label=document.createElement('summary'),reference=document.createElement('p');label.textContent='人工核验英文参考答案';reference.textContent=event.reference;details.append(label,reference);article.append(details);}
    $('events').append(article);
   });
- }
+ }else{const empty=document.createElement('div');empty.className='empty';empty.textContent='等待本次实验的第一份总结与 ROUGE 分数。';$('events').append(empty);}
  $('aggregate-panel').hidden=!job.aggregates?.length;
  if(job.aggregates?.length){
   $('aggregates').replaceChildren();
   job.aggregates.forEach(row=>{
    const tr=document.createElement('tr');
-   [names[row.approach].split(' · ')[0],...['fact_selection_precision','fact_selection_recall','fact_selection_f1','coverage_unit_recall','polarity_contrast_coverage'].map(k=>rate(row[k]))].forEach(value=>{const td=document.createElement('td');td.textContent=value;tr.append(td);});
+   [names[row.approach].split(' · ')[0],...['rouge1_f1','rouge2_f1','rougeL_f1'].map(k=>rate(row[k]))].forEach(value=>{const td=document.createElement('td');td.textContent=value;tr.append(td);});
    $('aggregates').append(tr);
   });
  }
@@ -69,7 +69,7 @@ $('experiment-form').addEventListener('submit',async event=>{
  try{
   const arms=[...document.querySelectorAll('[name=arm]:checked')].map(x=>x.value);if(!arms.length)throw new Error('请至少选择一种方法。');
   const file=$('dataset-file').files[0];if(file&&file.size>9000000)throw new Error('文件须小于9 MB。');
-  const body={base_url:$('base-url').value,model:$('model').value,api_key:$('api-key').value,
+  const body={evaluation_method:'rouge_1_2_l_human_references_v1',base_url:$('base-url').value,model:$('model').value,api_key:$('api-key').value,
    limit:number('limit'),repeats:number('repeats'),max_claims:number('max-claims'),approaches:arms,
    max_output_tokens:number('max-output-tokens'),timeout:number('timeout'),thinking:$('thinking').value,
    input_price:number('input-price'),output_price:number('output-price'),dataset_jsonl:file?await file.text():''};
@@ -77,4 +77,4 @@ $('experiment-form').addEventListener('submit',async event=>{
  }catch(e){alertMessage(e.message);$('start').disabled=false;}
 });
 $('stop').onclick=async()=>{if(!activeJob)return;$('stop').disabled=true;try{const result=await request(`/api/jobs/${activeJob.id}/stop`,{});$('stage').textContent=result.message;}catch(e){alertMessage(e.message);$('stop').disabled=false;}};
-(async()=>{estimate();try{const info=await request('/api/info');$('dataset-info').textContent=`${info.cases} 个问题 · ${info.fact_count} 个标注事实 · 程序匹配评分`;$('source-status').textContent=info.dataset_status;const jobs=info.jobs.sort((a,b)=>b.started_at-a.started_at);if(jobs.length)render(jobs[0]);}catch(e){alertMessage('无法读取实验服务，请刷新或重新启动服务。');}})();
+(async()=>{estimate();try{const info=await request('/api/info');if(info.evaluation_method!=='rouge_1_2_l_human_references_v1'){$('start').disabled=true;alertMessage('当前服务仍是旧版评测。请停止旧进程，重新运行 python launch_web.py，再刷新网页。');return;}$('dataset-info').textContent=`${info.cases} 个问题 · ${info.reference_count} 条人工参考答案 · ROUGE 本地评分`;$('source-status').textContent=info.dataset_status;const jobs=info.jobs.sort((a,b)=>b.started_at-a.started_at);if(jobs.length)render(jobs[0]);}catch(e){alertMessage('无法读取实验服务，请刷新或重新启动服务。');}})();

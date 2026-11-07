@@ -112,7 +112,7 @@ def load_retrieval(path):
 
 
 def build_context(hits, max_context_chars=24000, max_chunk_chars=4000, *,
-                  context_policy='latest_update', as_of=None):
+                  context_policy='latest_update', as_of=None, include_review_metadata=False):
     """Keep ranking, deduplicate IDs and bound serialized context without mutation."""
     if not isinstance(hits, list):
         raise ValueError('hits must be a ranked list, not raw sparse/dense output')
@@ -120,8 +120,12 @@ def build_context(hits, max_context_chars=24000, max_chunk_chars=4000, *,
         raise ValueError('Invalid context limits')
     if context_policy not in CONTEXT_POLICIES:
         raise ValueError('Unknown context policy')
-    if context_policy == 'latest_update':
+    if type(include_review_metadata) is not bool:
+        raise ValueError('include_review_metadata must be boolean')
+    metadata_enabled = context_policy == 'latest_update' or include_review_metadata
+    if metadata_enabled:
         as_of = context_time(as_of)
+    if context_policy == 'latest_update':
         hits = latest_review_hits(hits)
     selected, seen, review_ids = [], set(), []
     for hit in hits:
@@ -140,20 +144,20 @@ def build_context(hits, max_context_chars=24000, max_chunk_chars=4000, *,
         url = url if isinstance(url, str) and urlparse(url).scheme in ('http', 'https') and urlparse(url).netloc else None
         entry = {'chunk_id': cid, 'text': text[:max_chunk_chars],
                  'game_name': str(meta.get('game_name') or '')[:200], 'source_url': url}
-        if context_policy == 'latest_update':
+        if metadata_enabled:
             created, updated = review_times(meta)
             if created is not None: entry['created_at_utc'] = created.isoformat()
             if updated is not None: entry['updated_at_utc'] = updated.isoformat()
-            entry['evidence_scope'] = meta['evidence_scope']
+            entry['evidence_scope'] = meta.get('evidence_scope', 'full_review')
             entry.update(review_signals(meta, as_of))
-        if context_policy == 'latest_update':
+        if metadata_enabled:
             # Reserve the final flag's serialized space before applying the budget.
             entry['is_high_helpfulness'] = False
         if len(json.dumps(selected + [entry], ensure_ascii=False)) > max_context_chars:
             break
         selected.append(entry)
-        if context_policy == 'latest_update': review_ids.append(review_key(hit))
-    if context_policy == 'latest_update':
+        if metadata_enabled: review_ids.append(review_key(hit))
+    if metadata_enabled:
         votes = {rid: entry['helpful_votes'] for rid, entry in zip(review_ids, selected)
                  if 'helpful_votes' in entry}
         threshold = high_helpfulness_threshold(votes.values())
@@ -271,7 +275,8 @@ def validate_claim(claim, sources, require_quotes=True, require_fact_ids=False):
 def generate_summary(query, hits, *, approach='verify_revise', model=None, client=None,
                      max_context_chars=24000, max_chunk_chars=4000,
                      input_cost_per_million=None, output_cost_per_million=None, max_claims=12,
-                     fact_candidates=None, context_policy='latest_update', as_of=None):
+                     fact_candidates=None, context_policy='latest_update', as_of=None,
+                     include_review_metadata=False):
     """Generate, verify/delete or verify/revise/reverify using the same model/client."""
     started = time.perf_counter()
     if not isinstance(query, str) or not query.strip() or len(query) > 8000:
@@ -283,9 +288,11 @@ def generate_summary(query, hits, *, approach='verify_revise', model=None, clien
     for price in (input_cost_per_million, output_cost_per_million):
         if price is not None and (not math.isfinite(price) or price < 0):
             raise ValueError('Token prices must be finite and nonnegative')
-    clock = context_time(as_of) if context_policy == 'latest_update' else None
+    metadata_enabled = context_policy == 'latest_update' or include_review_metadata
+    clock = context_time(as_of) if metadata_enabled else None
     context = build_context(hits, max_context_chars, max_chunk_chars,
-                            context_policy=context_policy, as_of=clock)
+                            context_policy=context_policy, as_of=clock,
+                            include_review_metadata=include_review_metadata)
     sources = {x['chunk_id']: x for x in context}
     fact_mode = fact_candidates is not None
     if fact_mode:
@@ -302,7 +309,8 @@ def generate_summary(query, hits, *, approach='verify_revise', model=None, clien
                              'provenance_valid_claims': 0, 'retained_original_claims': 0,
                              'revised_claims': 0, 'semantic_discarded_claims': 0}}
     result['context_policy'] = context_policy
-    if context_policy == 'latest_update':
+    if include_review_metadata: result['include_review_metadata'] = True
+    if metadata_enabled:
         result['context_evidence'] = context
         result['context_as_of_utc'] = clock.isoformat()
         result['review_weight_formula'] = 'helpful_votes / max(review_age_days, 1)'
@@ -316,7 +324,9 @@ def generate_summary(query, hits, *, approach='verify_revise', model=None, clien
             transport = OpenAICompatibleClient()
         system = (PROMPTS / (prompt + '.txt')).read_text(encoding='utf-8')
         if context_policy == 'latest_update':
-            system += TEMPORAL_INSTRUCTIONS + REVIEW_WEIGHT_INSTRUCTIONS
+            system += TEMPORAL_INSTRUCTIONS
+        if metadata_enabled:
+            system += REVIEW_WEIGHT_INSTRUCTIONS
             payload = dict(payload, as_of_utc=clock.isoformat())
         if fact_mode:
             system += '\n' + (PROMPTS / 'fact_selection.txt').read_text(encoding='utf-8')

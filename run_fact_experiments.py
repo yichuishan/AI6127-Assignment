@@ -1,4 +1,4 @@
-"""Structured fact selection experiment: generation calls only; exact-ID scoring."""
+"""Compatibility entry point: ROUGE by default; --legacy-facts runs the archived fact-ID protocol."""
 import argparse
 import collections
 import csv
@@ -170,7 +170,7 @@ def run(cases,out,*,client,model,approaches=APPROACHES,repeats=1,max_claims=4,se
     return rows
 
 
-def main():
+def fact_main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--output',required=True)
     p.add_argument('--model',default='deepseek-v4-pro');p.add_argument('--base-url',default='https://api.deepseek.com')
     p.add_argument('--limit',type=int,default=3);p.add_argument('--repeats',type=int,default=1)
@@ -178,5 +178,15 @@ def main():
     if not 1<=args.limit<=100 or not 1<=args.repeats<=5 or not 1<=args.max_claims<=12:p.error('Invalid size parameters')
     client=OpenAICompatibleClient(base_url=args.base_url)
     run(jsonl(BENCHMARK)[:args.limit],args.output,client=client,model=args.model,repeats=args.repeats,max_claims=args.max_claims,config={'base_url':args.base_url})
+
+def main():
+    import sys
+    if '--legacy-facts' in sys.argv:
+        sys.argv.remove('--legacy-facts')
+        fact_main()
+    else:
+        from run_generation_experiments import main as rouge_main
+        rouge_main()
+
 
 if __name__=='__main__':main()

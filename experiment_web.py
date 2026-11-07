@@ -14,8 +14,8 @@ from urllib.parse import urlparse
 import zipfile
 
 from rag_generator import APPROACHES, OpenAICompatibleClient, safe_error
-from run_fact_experiments import jsonl, run, benchmark, aggregate
-from evaluate_fact_selection import ANNOTATIONS, REFERENCE_VERSION
+from run_generation_experiments import jsonl, run, benchmark, aggregate
+from evaluate_generation import EVALUATION_METHOD, load_references
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DATASET = ROOT / 'experiments/steam_generation_eval.jsonl'
@@ -66,7 +66,7 @@ class LiveClient:
             raise Cancelled()
         system = messages[0]['content']
         stage = ('证据核验' if 'evidence verifier' in system else
-                 '修订观点' if 'Repair one rejected' in system else '选择事实并生成总结')
+                 '修订观点' if 'Repair one rejected' in system else '基于评论生成总结')
         with job.lock:
             job.state.update(stage=stage, api_calls=job.state['api_calls'] + 1)
         response = self.transport.complete(messages, model, temperature)
@@ -96,7 +96,7 @@ class Job:
                 self.state['total'] = len(cases)*data['repeats']*len(data['approaches'])
             def progress(row, completed, total):
                 with self.lock:
-                    self.state.update(completed=completed,total=total,stage='事实 ID 算法评分完成')
+                    self.state.update(completed=completed,total=total,stage='ROUGE 评分完成')
                     self.state['failed'] += row['status']=='failed'
                     self.state['scored'] += row['status']=='completed'
                     self.state['events'].append({'case_id':row['case_id'],'approach':row['approach'],
@@ -104,7 +104,7 @@ class Job:
                         'error_message':row.get('error_message'),'error_code':row.get('error_code'),
                         'http_status':row.get('http_status'),'error_stage':row.get('error_stage'),
                         'metrics':row['metrics'],
-                        'selected_fact_ids':row.get('result',{}).get('selected_fact_ids',[]),
+                        'reference':row.get('reference',''),
                         'summary':row.get('result',{}).get('summary','')[:1800]})
                     self.state['events']=self.state['events'][-30:]
                     if len(self.state['events'])>=3 and all(e['status']=='failed' for e in self.state['events'][-3:]):
@@ -117,7 +117,7 @@ class Job:
                 progress=progress,stop_requested=self.stop.is_set)
             with self.lock:
                 self.state.update(status='stopped' if self.stop.is_set() else 'completed',
-                    stage='已停止' if self.stop.is_set() else '事实选择测试结束',aggregates=aggregate(rows))
+                    stage='已停止' if self.stop.is_set() else 'ROUGE 总结实验结束',aggregates=aggregate(rows))
         except Exception as error:
             with self.lock:
                 self.state.update(status='failed',stage='运行失败',**safe_error(error))
@@ -138,8 +138,10 @@ class Application:
 
     def start(self, owner, data):
         allowed={'api_key','base_url','model','repeats','max_output_tokens','timeout','thinking',
-                 'max_claims','limit','approaches','input_price','output_price','dataset_jsonl'}
+                 'max_claims','limit','approaches','input_price','output_price','dataset_jsonl','evaluation_method'}
         if set(data)-allowed:raise ValueError('Unsupported experiment option')
+        if data.get('evaluation_method',EVALUATION_METHOD)!=EVALUATION_METHOD:
+            raise ValueError('评测版本不匹配，请重启服务并刷新网页。')
         key=data.get('api_key','')
         if not isinstance(key,str) or not key.strip() or len(key)>4096:raise ValueError('请输入 API Key。')
         data['api_key']=key.strip();data['base_url']=endpoint(data.get('base_url',''))
@@ -223,10 +225,10 @@ def server(host='127.0.0.1', port=8080, application=None):
                 return self.send(401, {'error': '请先打开页面。'})
             if path == '/api/info':
                 cases = jsonl(DEFAULT_DATASET)
-                stats=json.loads((ANNOTATIONS/'statistics.json').read_text())
-                return self.send(200, {'cases': len(cases), 'fact_count':stats['facts'],
-                    'evaluation_method':'exact_fact_id_matching_human_review_v1','reference_version':REFERENCE_VERSION,
-                    'dataset_status': '基于 1,000 条标注评论与 100 个固定问题；已应用 40 项人工复核：22 项核心、7 项可选补充、11 项排除。',
+                refs=load_references()
+                return self.send(200, {'cases': len(cases), 'reference_count':len(refs),
+                    'evaluation_method':EVALUATION_METHOD,'reference_version':next(iter(refs.values()))['dataset_revision'],
+                    'dataset_status': '100 条人工核验英文参考答案；使用对应的完整固定评论及票数、日期元数据。模型不接收参考答案或事实候选 ID。',
                     'dataset_access': json.loads((ROOT/'experiments/dataset_access.json').read_text()) if (ROOT/'experiments/dataset_access.json').exists() else None,
                     'jobs': [j.snapshot() for j in app.jobs.values() if j.owner == owner]})
             parts = path.strip('/').split('/')

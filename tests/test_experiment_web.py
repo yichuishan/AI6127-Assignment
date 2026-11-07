@@ -18,6 +18,7 @@ class Model:
         self.key = kwargs['api_key']
     def complete(self, messages, model, temperature):
         payload = json.loads(messages[1]['content'])
+        assert 'fact_candidates' not in payload and 'reference' not in payload
         system = messages[0]['content']
         if 'Evaluate an answer' in system:
             raise AssertionError('No evaluator model may be called by this webpage')
@@ -26,7 +27,6 @@ class Model:
         else:
             evidence=payload['evidence'][0]
             obj={'claims':[{'text':'A retrieved reviewer shares an opinion.', 'chunk_ids':[evidence['chunk_id']],
-                'fact_ids':[c['fact_id'] for c in payload.get('fact_candidates',[]) if c['chunk_id']==evidence['chunk_id']][:1],
                 'evidence':[{'chunk_id':evidence['chunk_id'],'quote':evidence['text'][:40]}]}]}
         return {'content':json.dumps(obj),'usage':{'prompt_tokens':10,'completion_tokens':5}}
 
@@ -64,8 +64,11 @@ class WebTests(unittest.TestCase):
         self.assertIn('results/predictions.jsonl',z.namelist())
         self.assertIn('results/evaluation_references.jsonl',z.namelist())
         rows=[json.loads(x) for x in z.read('results/checkpoint.jsonl').splitlines()]
-        self.assertTrue(all('selected_fact_ids' in r['result'] for r in rows))
-        self.assertTrue(all('fact_selection_f1' in r['metrics'] for r in rows))
+        self.assertTrue(all('selected_fact_ids' not in r['result'] for r in rows))
+        self.assertTrue(all('rougeL_f1' in r['metrics'] for r in rows))
+        self.assertTrue(all('fact_selection_f1' not in r['metrics'] for r in rows))
+        self.assertTrue(all(r['reference'] for r in rows))
+        self.assertIn('rouge1_f1',z.read('results/summary.csv').decode())
         self.assertTrue(all('faithfulness' not in r['metrics'] for r in rows))
         for name in z.namelist():self.assertNotIn(b'secret-web-test-only',z.read(name))
         other=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
@@ -122,9 +125,11 @@ class WebTests(unittest.TestCase):
         self.assertEqual(instances[0]['timeout'],90)
         self.assertEqual(state['scored'],4)
         manifest=json.loads((self.app.jobs[job['id']].directory/'results/manifest.json').read_text())
-        self.assertEqual(manifest['evaluation_method'],'exact_fact_id_matching_human_review_v1')
-        self.assertEqual(manifest['reference_version'],'human_review_v1')
-        self.assertIn('human_review_hash',manifest)
+        self.assertEqual(manifest['evaluation_method'],'rouge_1_2_l_human_references_v1')
+        self.assertIn('bilingual_synthesis_v4',manifest['reference_version'])
+        self.assertIn('reference_sha256',manifest)
+        self.assertFalse(manifest['fact_candidates_in_prompt'])
+        self.assertFalse(manifest['reference_summaries_in_prompt'])
         self.assertFalse(any(k.startswith('judge_') for k in manifest))
         cfg=self.config();cfg['judge_model']='qwen3.8-max'
         with self.assertRaises(urllib.error.HTTPError) as error:self.post('/api/jobs',cfg)
@@ -136,6 +141,15 @@ class WebTests(unittest.TestCase):
         cfg=self.config();cfg['dataset_jsonl']=json.dumps(case)
         with self.assertRaises(urllib.error.HTTPError) as error:self.post('/api/jobs',cfg)
         self.assertEqual(error.exception.code,400)
+
+    def test_wrong_scoring_protocol_is_rejected_before_any_job_starts(self):
+        cfg=self.config();cfg['evaluation_method']='exact_fact_id_matching_human_review_v1'
+        with self.assertRaises(urllib.error.HTTPError) as error:self.post('/api/jobs',cfg)
+        self.assertEqual(error.exception.code,400)
+        self.assertEqual(self.app.jobs,{})
+        info=json.loads(self.client.open(self.url+'/api/info').read())
+        self.assertEqual(info['reference_count'],100)
+        self.assertEqual(info['evaluation_method'],'rouge_1_2_l_human_references_v1')
 
     def test_stop_and_report_partial_results(self):
         entered, release=threading.Event(),threading.Event()

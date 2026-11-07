@@ -2,7 +2,7 @@
 
 This directory contains **100 assistant-drafted English reference answers**, with Chinese translations of all questions, answers, 172 evidence-linked sentences, and 19 priority-review notes. Drafts are based on each question's fixed review evidence and the existing query-specific scope annotations. A/B/C/D generated answers were not used to write them. No generation or translation API key was used.
 
-The completed user review is available in [`reviewed/`](reviewed/README.md): **100 English-ready references**, comprising 98 unchanged approvals and two translated Chinese edits. The q03 edit includes an additional wording confirmation from the user. ROUGE has not yet been calculated from these finalized references.
+The completed user review is available in [`reviewed/`](reviewed/README.md): **100 English-ready references**, comprising 98 unchanged approvals and two translated Chinese edits. The q03 edit includes an additional wording confirmation from the user. The web interface and `run_generation_experiments.py` now use these finalized references for ROUGE-1/2/L scoring.
 
 Records in `drafts/` remain pending templates. Original review evidence remains verbatim English; Chinese claim explanations are reading aids, not additional evidence. Import `reviewed/reference_review_records.jsonl` into the existing page to restore the completed review, including both translations.
 
@@ -70,7 +70,7 @@ When importing translated records, `reference` is the translated English text, w
 
 These are 100 question-conditioned summary drafts, distinct from the 1,000 source review passages and their aspect labels. Approval should be based on evidence rather than agreement with a generation method. Keep scoring reference text free of inline citation IDs; provenance is stored separately.
 
-These drafts retain the original fixed review texts and their `context_sha256`; supplemental helpful-vote/date metadata and high-vote flags are stored separately in `review_metadata` with its own hash. They do not change the archived fact-selection reference sets or reported scores. For a future ROUGE comparison using these references, provide the same review metadata to every generation method. Newest-update filtering requires its own matching references because this set preserves the full fixed review texts.
+These drafts retain the original fixed review texts and their `context_sha256`; supplemental helpful-vote/date metadata and high-vote flags are stored separately in `review_metadata` with its own hash. They do not change the archived fact-selection reference sets or reported scores. The current ROUGE runner provides the same review metadata to every generation method. Newest-update filtering requires its own matching references because this set preserves the full fixed review texts.
 
 ## Validation
 

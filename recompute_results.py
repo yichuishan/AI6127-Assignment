@@ -1,4 +1,4 @@
-"""Recompute saved experiment outputs using the final references. No API key or model calls."""
+"""Offline ROUGE rescoring by default; --legacy-facts reproduces archived fact-ID scores."""
 import argparse
 import copy
 import hashlib
@@ -60,7 +60,7 @@ def rescore(rows, references):
     return out
 
 
-def main():
+def fact_main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('source',help='Downloaded experiment ZIP, results directory, or generation_results.json')
     parser.add_argument('--output',required=True,help='New directory for recomputed outputs')
@@ -86,5 +86,14 @@ def main():
         print(f"{item['approach']}: F1={item.get('fact_selection_f1')} completed={item['completed']}")
 
 
-if __name__=='__main__':
-    main()
+def main():
+    import sys
+    if '--legacy-facts' in sys.argv:
+        sys.argv.remove('--legacy-facts')
+        fact_main()
+    else:
+        from evaluate_generation import main as rouge_main
+        rouge_main()
+
+
+if __name__=='__main__':main()

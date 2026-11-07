@@ -152,7 +152,7 @@ The returned dictionary contains:
 | `context_as_of_utc`, `review_weight_formula` | Reference time and formula used to calculate live review weights |
 | `retrieval_filters` | Selected game scope recorded by the integrated app |
 
-The `improved` configuration requires verbatim evidence quotes and validates them against the supplied passages. The other available configurations are `baseline`, `verify_delete`, and `verify_revise`. The latter two use the generation model for internal self-checking. Live generation uses the original chunk IDs for citations and does not require the benchmark's `fact_candidates`.
+The `improved` configuration requires verbatim evidence quotes and validates them against the supplied passages. The other available configurations are `baseline`, `verify_delete`, and `verify_revise`. The latter two use the generation model for internal self-checking. Live generation and ROUGE experiments use the original chunk IDs for citations, without fact candidates.
 
 ## Using retrieval directly
 
@@ -193,17 +193,29 @@ Fields such as `mode`, `filters`, `params`, `expansion`, and `timings_ms` remain
 
 ## Evaluation
 
-The live integration above answers questions using the current retrieval results. The summarization experiment uses a separate fixed 100-question benchmark with saved contexts and human-reviewed reference sets. It measures fact-selection Precision/Recall/F1, coverage-unit recall, and polarity-contrast coverage using deterministic code. Final scoring does not call an evaluator model.
+The summarization web interface and `run_generation_experiments.py` now score ROUGE-1, ROUGE-2 and ROUGE-L against 100 finalized human-reviewed English references. Precision, recall and F1 are stored for each metric; the web interface shows macro F1 percentages. Scoring removes citation-ID markers, lowercases English alphanumeric tokens and does not use stemming. It is computed locally without an evaluation model.
 
-The experiment runner and its web interface explicitly use `context_policy="full_review"` to match the existing references. Live summarization uses `latest_update` by default. Reference annotations must match the filtered context before evaluating the new policy.
+The benchmark preserves the reference-matched full fixed review text (`context_policy="full_review"`, `include_review_metadata=True`) and supplies helpful-vote/date metadata. Reference answers and fact candidates are not sent to the model. The integrated live app separately applies its required game scope and latest-update policy. Changed retrieval contexts need matching reference review.
 
-To reproduce the saved summarization results without API calls, run from `code/`:
+From `code/`, run a new experiment after configuring the generation API:
 
 ```bash
-python generation/rag_summary/recompute_results.py generation/rag_summary/experiments/final/generation_results.json --output ../data/generation_results/rag_summary/report_reproduction
+python generation/rag_summary/run_generation_experiments.py --output ../data/generation_results/rag_summary/rouge_run --limit 100 --repeats 1 --max-claims 4 --base-url https://api.deepseek.com --model deepseek-v4-pro
 ```
 
-Use a new output directory. Full experiment settings, benchmark data, results, and additional commands are described in `rag_summary/README.md`. New questions or changed retrieval contexts need corresponding reference annotations before benchmark selection metrics can be computed.
+Rescore a result ZIP without API calls:
+
+```bash
+python generation/rag_summary/evaluate_generation.py generation-experiment.zip --output ../data/generation_results/rag_summary/rouge_rescored
+```
+
+Historical fact-ID evaluation remains available for reproducing the earlier report:
+
+```bash
+python generation/rag_summary/recompute_results.py generation/rag_summary/experiments/final/generation_results.json --legacy-facts --output ../data/generation_results/rag_summary/fact_report_reproduction
+```
+
+Use new output directories. Upload the updated complete `rag_summary/` module, including `evaluate_generation.py`, `run_generation_experiments.py` and `data/reference_summaries/reviewed/`. Full settings and output descriptions are in `rag_summary/README.md`.
 
 The classification contributor should document the classification interface, execution commands, and evaluation alongside this summarization interface.
 

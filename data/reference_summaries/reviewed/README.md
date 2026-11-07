@@ -22,6 +22,6 @@ Each scoring record has `id`, `query`, `reference`, `reference_zh`, `reference_l
 
 ## Scope
 
-These references apply to the existing 100 fixed questions and full review contexts, with the corresponding helpful-vote metadata. They are ready to use as English references for summary evaluation, including ROUGE. ROUGE has not yet been calculated from this completed review. Filtering reviews, changing passages or changing questions requires matching reference updates.
+These references apply to the existing 100 fixed questions and full review contexts, with the corresponding helpful-vote metadata. The web interface and `run_generation_experiments.py` load them automatically for ROUGE-1/2/L scoring. Each run records the per-answer scores and aggregates in its own output directory. Filtering reviews, changing passages or changing questions requires matching reference updates.
 
 The existing fact-ID reference sets and archived experiment scores are separate and remain unchanged. No model API calls were made to finalize these records.
