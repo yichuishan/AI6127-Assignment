@@ -2,7 +2,9 @@
 
 This directory contains **100 assistant-drafted English reference answers**, with Chinese translations of all questions, answers, 172 evidence-linked sentences, and 19 priority-review notes. Drafts are based on each question's fixed review evidence and the existing query-specific scope annotations. A/B/C/D generated answers were not used to write them. No generation or translation API key was used.
 
-All source records remain **pending human review**. They are not confirmed gold references, and ROUGE has not been computed from them. Original review evidence remains verbatim English; Chinese claim explanations are reading aids, not additional evidence.
+The completed user review is available in [`reviewed/`](reviewed/README.md): **100 English-ready references**, comprising 98 unchanged approvals and two translated Chinese edits. The q03 edit includes an additional wording confirmation from the user. ROUGE has not yet been calculated from these finalized references.
+
+Records in `drafts/` remain pending templates. Original review evidence remains verbatim English; Chinese claim explanations are reading aids, not additional evidence. Import `reviewed/reference_review_records.jsonl` into the existing page to restore the completed review, including both translations.
 
 All 100 answers have been rewritten as coherent paragraphs. They lead with the response to the question, merge repeated information, and connect benefits, limitations and disagreements. The evidence section maps each sentence back to its sources, rather than treating the answer as a sequence of review abstracts.
 
@@ -34,7 +36,7 @@ The page does not translate edits automatically or call an API. It keeps both la
 | Edit English directly, leaving the Chinese draft unchanged | The reviewed English text can be exported; the Chinese text is labeled as the original comparison |
 | Pending or rejected | Excluded from approved-reference export |
 
-Nineteen questions are flagged for priority review. All 100 still require human confirmation. The evidence headings show recorded helpful votes; expand a review to see publication/update timestamps and its original text. Browser progress is saved locally; export a backup after each review session.
+Nineteen draft questions are flagged for priority review. When starting from the draft templates, confirm each answer; the completed review can instead be restored from the file above. The evidence headings show recorded helpful votes; expand a review to see publication/update timestamps and its original text. Browser progress is saved locally; export a backup after each review session.
 
 Version `bilingual_synthesis_v4` restores English-only, `bilingual_v2`, and `bilingual_votes_v3` records while preserving personal edits, reviewer names, and notes. Unedited old text is replaced by the revised answer. Earlier approvals return to **pending** so the rewritten answer can be checked again. Old records remain stored under their previous browser key. Imports from this version also check `review_metadata_sha256`.
 

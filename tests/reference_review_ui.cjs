@@ -158,6 +158,19 @@ async function main() {
     assert.equal(record.human_reviewed, true); assert.equal(record.translation_status, 'translated');
     assert.equal(record.reference, 'A reviewed English translation.');
   });
+  const completed = fs.readFileSync(path.join(root, 'data/reference_summaries/reviewed/reference_review_records.jsonl'), 'utf8')
+    .trim().split(/\r?\n/).map(line => JSON.parse(line));
+  b = browser();
+  await importRows(completed);
+  check('the completed human review imports as 100 English-ready references', () => {
+    assert.equal(b.run('DATA.filter(r=>ready(r,state(r))).length'), 100);
+    const final = clone(b.run('DATA.map(record)'));
+    for (const item of completed) {
+      const restored = final.find(r=>r.id===item.id);
+      assert.equal(restored.reference, item.reference);
+      assert.equal(restored.edited_draft_zh, item.edited_draft_zh);
+    }
+  });
   console.log(`${checks} UI workflow checks passed.`);
 }
 main().catch(e => {console.error(e); process.exitCode=1;});

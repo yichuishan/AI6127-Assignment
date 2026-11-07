@@ -273,6 +273,7 @@ Each prediction line contains `id` and `selected_fact_ids`, with optional `appro
 
 ## Data and Scoring
 
+- `data/reference_summaries/reviewed/approved_references.jsonl`: 100 human-reviewed English summary references, including two translated Chinese edits. These answer-level references are ready for ROUGE evaluation and are separate from the fact-ID labels below.
 - `experiments/steam_generation_eval.jsonl`: 100 fixed questions, each with up to ten annotated review passages from saved `hybrid_rerank` rankings.
 - `data/generation_annotations/`: 1,000 annotated source passages, 2,898 review–aspect facts, and the final reference sets.
 - `data/generation_annotations/human_review.json`: 40 user-adjudicated decisions across 16 questions, comprising 22 core facts, seven optional background facts, and 11 excluded facts.

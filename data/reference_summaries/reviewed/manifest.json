@@ -1,0 +1,41 @@
+{
+  "schema": "human_reviewed_summary_references_v1",
+  "records": 100,
+  "submitted_approved_unchanged": 98,
+  "submitted_chinese_edits": 2,
+  "translated_records": 2,
+  "chat_adjudicated_records": 1,
+  "english_ready_references": 100,
+  "pending_references": 0,
+  "review_status_counts": {
+    "approved": 98,
+    "edited": 2
+  },
+  "dataset_revision": "86c94bdde38df6390900_bilingual_synthesis_v4",
+  "reference_policy": "coherent_synthesis_v1",
+  "reference_language": "en",
+  "translation_provider": "assistant",
+  "model_api_calls": 0,
+  "prepared_at_utc": "2026-11-07T07:07:24.393599+00:00",
+  "submission_file_sha256": "228724e5777dadcd9df4194614c15989d9205fbb71c2892d644c435645b418c1",
+  "source_drafts_sha256": "fc0d7e0584921c8d786c96ef0ab88dda18cbb7e31fae540ad3cb1bbc6da704d6",
+  "reference_scope": "The existing full fixed review contexts and their recorded helpful-vote metadata.",
+  "file_sha256": {
+    "submitted_review_records.jsonl": "228724e5777dadcd9df4194614c15989d9205fbb71c2892d644c435645b418c1",
+    "reference_review_records.jsonl": "8910482d3ad80a28339d349845c305ab0cdb035ad1060a3192adc906ef4ede41",
+    "approved_references.jsonl": "9119557ad0c0581e6e95055bcbe9e761b64ac8c68c14c1c76c8fa5b4d47d73df",
+    "adjudications.json": "ed578c18bfe2488adfe683156011390749ebc715fc1413754845001275119c1d"
+  },
+  "checks": [
+    "100 unique IDs match current questions, context hashes, metadata hashes and draft revision.",
+    "98 unchanged English approvals preserved verbatim.",
+    "Two Chinese edits translated; q03 wording additionally confirmed by the user.",
+    "All 100 English references are ready; no pending translations.",
+    "Raw submitted records preserved; archived experiment scores unchanged."
+  ],
+  "validation": {
+    "reference_integrity_tests_passed": 5,
+    "review_ui_workflow_checks_passed": 14,
+    "completed_review_import_english_ready": 100
+  }
+}
