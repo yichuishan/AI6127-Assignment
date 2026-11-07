@@ -16,7 +16,7 @@ The two components can use the same retrieved passages. The summarizer reads the
 ```python
 from generation.rag_summary.rag_generator import generate_summary
 
-result = generate_summary(query, hits, approach="improved", max_claims=4)
+result = generate_summary(query, hits, max_claims=4)
 ```
 
 Configure the API environment variables below before making this call. Run integration commands from **`code/`**, so imports from `generation`, `retrieval`, and `paths` resolve.
@@ -40,11 +40,11 @@ The updated app requires at least one explicitly selected game before retrieval 
 
 Additional metadata such as `source` and `title` can remain in the hit. Rank and score fields such as `retrieved_by`, `sparse_rank`, `dense_rank`, `rrf_rank`, `rrf_score`, and `score` are not added to the model context. The ranked list order is preserved, duplicate passage IDs are removed, and the original user question is used rather than the expanded retrieval query.
 
-Live generation defaults to `context_policy="latest_update"`: among multiple snapshots of one review, only the newest available snapshot is retained. Explicit substantive `Edit:`/`Update:` sections are reduced to the latest visible update and continuation, including updates spanning multiple supplied chunks. Earlier opinions are excluded from generation and quote validation. Wording-only edit notes do not replace the review. If update boundaries are absent, the latest full snapshot is used. Available review timestamps and an `evidence_scope` field accompany the text. Original stored reviews and citation IDs are preserved. Update the complete `rag_summary/` module, including `review_context.py`, when installing this behavior.
+Live generation defaults to `context_policy="latest_update"`: among multiple snapshots of one review, only the newest available snapshot is retained. Explicit substantive `Edit:`/`Update:` sections are reduced to the latest visible update and continuation, including updates spanning multiple supplied chunks. Earlier opinions are excluded from the model context. Wording-only edit notes do not replace the review. If update boundaries are absent, the latest full snapshot is used. Available review timestamps and an `evidence_scope` field accompany the text. Original stored reviews and citation IDs are preserved. Update the complete `rag_summary/` module, including `review_context.py`, when installing this behavior.
 
 The same live context includes recorded `helpful_votes`, `review_age_days`, and `helpful_votes_per_day` when available. The weight is `helpful_votes / max(days_since_first_publication, 1)`. Last-edit timestamps do not reset review age. Missing or invalid inputs leave the weight unavailable. One shared `as_of_utc` is used across generation and self-check stages. `is_high_helpfulness` marks reviews meeting both a ten-vote minimum and the nearest-rank upper quartile of distinct visible reviews. Answer prose may call these reviews “highly upvoted” but omits raw counts and rates; lower-vote sources are blended into the answer without vote attribution. Votes do not establish consensus. Retrieval order is unchanged.
 
-The prompt asks for a coherent answer organized around the question. Overlapping information is merged and the `claims` array follows paragraph order, rather than allocating one mini-summary to each review. Source quotes, important conditions and disagreements remain required. No background, popularity, recency or mod-development facts are added just to improve the prose.
+The prompt asks for a coherent answer organized around the question. Overlapping information is merged and the `claims` array follows paragraph order, rather than allocating one mini-summary to each review. Source citations, important conditions and disagreements remain required. No background, popularity, recency or mod-development facts are added just to improve the prose.
 
 No conversion is required between the app's final `hits` list and the summarizer. BM25-only, dense-only, fused, and reranked results use the same input contract.
 
@@ -94,7 +94,6 @@ if st.button("Generate summary", key="rag_summary_generate"):
             result = generate_summary(
                 query,
                 hits,
-                approach="improved",
                 model=os.getenv("GENERATION_MODEL", "deepseek-v4-pro"),
                 client=OpenAICompatibleClient(
                     base_url=os.getenv("GENERATION_BASE_URL", "https://api.deepseek.com")
@@ -142,17 +141,17 @@ The returned dictionary contains:
 | Field | Content |
 |---|---|
 | `summary` | Answer text with inline `[chunk_id]` citations |
-| `claims` | Retained claims, supporting `chunk_ids`, and evidence quotes when the live `improved`/self-check API is used |
+| `claims` | Answer sentences and supporting `chunk_ids` |
 | `citations` | Unique cited passage IDs and available source URLs |
 | `status` | `ok`, `abstained`, or `no_evidence` |
 | `usage` | Available input/output token counts |
 | `latency_seconds` | Generation workflow time |
-| `stage_calls`, `claim_audit` | Generation and self-verification records |
+| `stage_calls`, `claim_audit` | Generation and citation-validation records |
 | `context_policy`, `context_evidence` | The selected policy and actual latest-update context used by the model |
 | `context_as_of_utc`, `review_weight_formula` | Reference time and formula used to calculate live review weights |
 | `retrieval_filters` | Selected game scope recorded by the integrated app |
 
-The `improved` configuration requires verbatim evidence quotes and validates them against the supplied passages. The other available configurations are `baseline`, `verify_delete`, and `verify_revise`. The latter two use the generation model for internal self-checking. Live generation and ROUGE experiments use the original chunk IDs for citations, without fact candidates.
+Generation uses one model call. Optional `few_shot_examples` and `compression_ratio` arguments enable demonstrations and local sentence extraction; `approach` in the returned result records the inferred configuration. Source IDs are checked against the actual model context.
 
 ## Using retrieval directly
 
@@ -175,7 +174,7 @@ fused = HybridRetriever().retrieve_fused(
     dense_query=expansion.dense,
 )
 hits = Reranker().rerank(query, fused, top_k=5)
-result = generate_summary(query, hits, approach="improved", max_claims=4)
+result = generate_summary(query, hits, max_claims=4)
 ```
 
 `HybridRetriever.retrieve()` returns separate sparse and dense lists. Use the final list from fusion or reranking as the generation input.
@@ -186,7 +185,7 @@ The search interface's **Download results (JSON)** button produces `search_resul
 
 ```bash
 python -c "from paths import GENERATION_RESULTS_DIR; (GENERATION_RESULTS_DIR / 'rag_summary').mkdir(parents=True, exist_ok=True)"
-python generation/rag_summary/rag_generator.py ../data/retrieval_results/search_results.json --approach improved --max-claims 4 --output ../data/generation_results/rag_summary/answer.json
+python generation/rag_summary/rag_generator.py ../data/retrieval_results/search_results.json --max-claims 4 --output ../data/generation_results/rag_summary/answer.json
 ```
 
 Fields such as `mode`, `filters`, `params`, `expansion`, and `timings_ms` remain in the retrieval export and are not passed to the model as review evidence.
@@ -213,11 +212,7 @@ Rescore a result ZIP without API calls:
 python generation/rag_summary/evaluate_generation.py generation-experiment.zip --output ../data/generation_results/rag_summary/rouge_rescored
 ```
 
-Outputs include the exact data split, demonstrations, original and actual evidence, all ROUGE scores, execution metrics, five paired comparisons and the two-factor interaction. Historical fact-ID evaluation remains available:
-
-```bash
-python generation/rag_summary/recompute_results.py generation/rag_summary/experiments/final/generation_results.json --legacy-facts --output ../data/generation_results/rag_summary/fact_report_reproduction
-```
+Outputs include the exact data split, demonstrations, original and actual evidence, all ROUGE scores, execution metrics, five paired comparisons and the two-factor interaction. Archived fact-ID result files remain available in `experiments/final/`; the old evaluation code and compatibility entry points have been removed.
 
 Use new output directories. Upload the updated complete `rag_summary/` module, including `context_compression.py`, `generation_experiment_design.py`, `prompts/few_shot.txt`, `data/generation_experiment/` and the reviewed references. Full settings are in `rag_summary/README.md`.
 

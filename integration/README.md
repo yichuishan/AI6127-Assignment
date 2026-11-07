@@ -17,7 +17,7 @@ git apply --check /path/to/app.patch
 git apply /path/to/app.patch
 ```
 
-Use one of these methods. The group repository must already contain the updated `code/generation/rag_summary/`, including `review_context.py`. Live generation uses its latest-update context policy by default.
+Use one of these methods. The group repository must already contain the updated `code/generation/rag_summary/`, including `review_context.py` and `context_compression.py`. Live generation uses its latest-update context policy by default.
 
 ## Run
 
@@ -31,7 +31,7 @@ streamlit run app.py
 
 Select at least one target game, enter the question, then click **Generate summary** after retrieval. For comparisons, select the specific games to compare. Empty game selection does not trigger retrieval or generation. Reviews with missing or out-of-scope game metadata are excluded.
 
-Generation produces up to four claims using the evidence-quote configuration, shows citations and review links, and provides a JSON download. The latest successful result is saved to `data/generation_results/rag_summary/latest_answer.json` through the shared `paths.py`, including the applied `retrieval_filters`.
+Generation produces up to four claims with one model call and the current citation format, shows citations and review links, and provides a JSON download. The latest successful result is saved to `data/generation_results/rag_summary/latest_answer.json` through the shared `paths.py`, including the applied `retrieval_filters`.
 
 Normal reruns reuse the stored answer. A changed question, game scope, or evidence hides the previous answer. Clearing the game selection removes the stored answer. API/configuration errors leave the retrieval results usable. A local save error preserves the generated answer and its download.
 

@@ -5,8 +5,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from context_compression import GAP, compress_context, sentence_spans
-from generation_experiment_design import (APPROACHES, EXPERIMENT_PROTOCOL, load_examples,
+from context_compression import GAP, compress_context
+from generation_experiment_design import (load_examples,
     load_split, select_cases, validate_cases)
 from evaluate_generation import load_references, rescore
 from rag_generator import build_context
@@ -99,7 +99,7 @@ class DesignTests(unittest.TestCase):
             for row in rows:
                 result=row['result'];arm=row['approach']
                 self.assertEqual(len(result['stage_calls']),1)
-                self.assertEqual(result['generation_approach'],'baseline')
+                self.assertEqual(result['approach'],arm)
                 if arm in ('compressed','combined'):
                     self.assertEqual(result['context_evidence'],compress_context(case['query'],full,.5)[0])
                 else:self.assertEqual(result['context_evidence'],full)

@@ -56,7 +56,7 @@ def load_examples(cases, references):
             raise ValueError('Demonstration evidence differs from original reviews')
         visible = {s['chunk_id']:s for s in evidence}
         claims = e['response']['claims']
-        if (not claims or any(validate_claim(c,visible,require_quotes=False) is None for c in claims)
+        if (not claims or any(validate_claim(c,visible) is None for c in claims)
                 or ' '.join(c['text'] for c in claims)!=references[e['case_id']]['reference']):
             raise ValueError('Demonstrations must match reviewed development answers and valid source IDs')
     return data

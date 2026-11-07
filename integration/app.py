@@ -184,7 +184,7 @@ def render_summary(query, hits, games):
         try:
             with st.spinner('Generating an answer from the retrieved reviews...'):
                 result = generate_summary(
-                    query, hits, approach='improved', max_claims=4,
+                    query, hits, max_claims=4,
                     model=os.getenv('GENERATION_MODEL', 'deepseek-v4-pro'),
                     client=OpenAICompatibleClient(
                         base_url=os.getenv('GENERATION_BASE_URL', 'https://api.deepseek.com')

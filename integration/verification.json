@@ -1,7 +1,7 @@
 {
   "group_base_commit": "ab5844eca94b7c0579c07c428f77fffecb92f5c8",
   "target_file": "code/app.py",
-  "app_sha256": "d0c934dcece1fd8bf158572093176b5429fe9fd96f1f0dd1e7b645bf7bc89d53",
+  "app_sha256": "98eab9bf25497e35db083e7d7b1f9fd0154d855d42628f5bedd63d4701a990c0",
   "streamlit_version": "1.66.1",
   "tests_passed": 23,
   "uses_paid_model_api": false,
@@ -9,5 +9,6 @@
   "production_changes": "Required explicit game scope; filtered sparse/dense candidates and ranked output; generation-boundary filtering; scope-aware answer cache and exported retrieval_filters.",
   "temporal_evidence": "Latest available review snapshot/update is provided to the model; update timestamps invalidate stale answers.",
   "helpfulness_evidence": "Recorded helpful vote counts and publication-age weights reach the model and saved output, using one shared as_of UTC timestamp.",
-  "game_scope": "No search or generation without selected games. Only selected games reach the generator, including when retrieval fixtures ignore their filters."
+  "game_scope": "No search or generation without selected games. Only selected games reach the generator, including when retrieval fixtures ignore their filters.",
+  "generation_protocol": "Single-call cited generation; optional few-shot and compression; legacy self-check/fact-ID paths removed."
 }

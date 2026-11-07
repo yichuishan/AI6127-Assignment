@@ -1,4 +1,6 @@
-# 最终生成评测数据
+# Archived Review and Fact Annotations
+
+These are the original review annotations and historical fact-selection targets. The current experiment uses reviewed English summaries and ROUGE through `run_generation_experiments.py` and `evaluate_generation.py`. The old fact-ID runner and scorer have been removed; their source remains in Git history at commit `7f4537d`.
 
 ## 来源
 
@@ -33,11 +35,3 @@
 原始方面标签保留不动。用户批准的明确子观点可以属于整体标为 Mixed 的评论；分组时采用该子观点的情感方向。其余条目保留原来的游戏、方面与情感匹配规则。
 
 最终有 591 个必需问题—事实对、238 个游戏—方面—情感覆盖单元，以及 24 个问题中的 27 个适用正负分歧组。q76 没有必需事实，允许作为背景的最低配置评价单独列入可选集合。
-
-## 生成输入与评分
-
-运行器为每条可见评论提供全部八个方面槽位，每项仅有 `fact_id`、`chunk_id`、`aspect`。槽位存在不代表该方面确实出现，人工标签和参考集合不发送给模型。
-
-生成观点携带 `fact_ids`。程序从最终保留观点合并选择 ID，再由 `evaluate_fact_selection.py` 统一计算指标。错误或未知 ID 保留在输出中参与扣分。
-
-覆盖单元选择一个支持事实即算覆盖；正负分歧组需同时选中至少一个正面和一个负面事实。Mixed 不自动算覆盖双方。条件保留和逐句语义支持没有在这次复核中标注，不作为本实验评分。

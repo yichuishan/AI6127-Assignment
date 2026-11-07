@@ -43,7 +43,6 @@ from rag_generator import generate_summary
 result = generate_summary(
     question,
     ranked_passages,
-    approach="improved",
     model="deepseek-v4-pro",
     max_claims=4,
 )
@@ -57,7 +56,7 @@ Live generation defaults to `context_policy="latest_update"`. Before context tru
 
 When a review contains explicit substantive `Edit:` or `Update:` blocks, only its latest visible update and continuation are provided to the model. Dated blocks use their dates when all updates are dated; otherwise their order determines the latest update. Repeated and numbered headings such as `Edit Edit:` and `(Edit 2:` are supported. Typo/phrasing-only notes do not replace the substantive review. If timestamps show an edit but no update boundaries are identifiable, the latest full snapshot is retained.
 
-For example, the Solar Crown review's final February 2026 update is provided without its earlier RTX 3070/60 FPS description. Conditions remaining in the selected update are preserved. Original stored reviews and citation IDs are unchanged. The same filtered evidence is used for generation, quote validation, verification, and revision. Available creation/update timestamps accompany the evidence; outputs record `context_policy` and the actual `context_evidence` for inspection. This uses the latest review content available in the retrieved hits.
+For example, the Solar Crown review's final February 2026 update is provided without its earlier RTX 3070/60 FPS description. Conditions remaining in the selected update are preserved. Original stored reviews and citation IDs are unchanged. The selected evidence is used for generation and source-citation validation. Available creation/update timestamps accompany the evidence; outputs record `context_policy` and the actual `context_evidence` for inspection. This uses the latest review content available in the retrieved hits.
 
 To explicitly use full reviews, pass `context_policy="full_review"` or the CLI option `--context-policy full_review`. The ROUGE experiment first uses `full_review` with `include_review_metadata=True` to construct the reference-matched original context. Compression methods then extract sentences from that context. Latest-update filtering is separate from this study.
 
@@ -106,14 +105,14 @@ Review identity uses Steam chunk IDs, or `metadata.review_id` with `appid`/`game
 The return value includes:
 
 - `summary`: the answer with inline `[chunk_id]` citations.
-- `claims`: the retained claim text, supporting `chunk_ids`, and evidence quotes when the live `improved`/self-check API is used.
+- `claims`: the answer sentences and supporting `chunk_ids`.
 - `citations`: unique cited `chunk_id` values and their available `source_url` values.
 - `status`: `ok`, `abstained`, or `no_evidence`.
-- `usage`, `latency_seconds`, `stage_calls`, and `claim_audit`: generation usage and verification records.
-- `context_policy` and, for live latest-update generation, `context_evidence`: the evidence policy and selected model input.
+- `usage`, `latency_seconds`, `stage_calls`, and `claim_audit`: generation usage and citation-validation records.
+- `context_policy` and `context_evidence`: the evidence policy and selected model input.
 - `context_as_of_utc` and `review_weight_formula`: the reference time and formula for live helpfulness weights.
 
-Live retrieval and the ROUGE benchmark both omit `fact_candidates`. Original chunk IDs remain available for source citations and exact-quote checks. They are removed from the answer text before ROUGE scoring.
+Original chunk IDs remain available for source citations and are removed from the answer text before ROUGE scoring. Generation uses one model call, with optional `few_shot_examples` and `compression_ratio` arguments. The returned `approach` is inferred from those options.
 
 ### API Configuration
 
@@ -161,7 +160,6 @@ if st.button("Generate summary", key="rag_summary_generate"):
             result = generate_summary(
                 query,
                 hits,
-                approach="improved",
                 model=os.getenv("GENERATION_MODEL", "deepseek-v4-pro"),
                 client=OpenAICompatibleClient(
                     base_url=os.getenv("GENERATION_BASE_URL", "https://api.deepseek.com")
@@ -210,7 +208,7 @@ Save the export as `data/retrieval_results/search_results.json`. After setting t
 
 ```bash
 python -c "from paths import GENERATION_RESULTS_DIR; (GENERATION_RESULTS_DIR / 'rag_summary').mkdir(parents=True, exist_ok=True)"
-python generation/rag_summary/rag_generator.py ../data/retrieval_results/search_results.json --approach improved --max-claims 4 --output ../data/generation_results/rag_summary/answer.json
+python generation/rag_summary/rag_generator.py ../data/retrieval_results/search_results.json --max-claims 4 --output ../data/generation_results/rag_summary/answer.json
 ```
 
 For programmatic loading, use:
@@ -251,7 +249,7 @@ hits = Reranker().rerank(query, fused, top_k=5)
 
 The integration above generates answers from the current retrieval results. The experiment web interface launched by `launch_web.py` uses a frozen 20/80 development/test split of the fixed 100-question benchmark. Its upload option accepts unchanged subsets belonging to the selected partition, excluding the two demonstration questions. New questions or different retrieved passages require matching references before ROUGE comparison.
 
-The module's bundled benchmark data and final experiment results remain inside `rag_summary/` for reproduction. Live group-app outputs use the shared `GENERATION_RESULTS_DIR` path shown above.
+The module's bundled benchmark data and archived experiment results remain inside `rag_summary/` for reference. Live group-app outputs use the shared `GENERATION_RESULTS_DIR` path shown above.
 
 ## Command-line ROUGE Experiments
 
@@ -263,7 +261,7 @@ python run_generation_experiments.py --output experiments/runs/fewshot_compressi
 
 For a trial run, use `--limit 3`. For development, use `--split development --limit 18`. Use a new, empty output directory. API keys are read from the local environment and excluded from outputs.
 
-The older `run_fact_experiments.py` command now delegates to this ROUGE runner by default. The allowed experiment methods are `baseline`, `few_shot`, `compressed`, and `combined`. Self-check methods are not accepted by the current runner or web API.
+The allowed experiment methods are `baseline`, `few_shot`, `compressed`, and `combined`. Self-check methods are not accepted by the current runner or web API.
 
 Outputs include:
 
@@ -300,7 +298,7 @@ Score a downloaded experiment ZIP, results directory, or saved result JSON:
 python evaluate_generation.py generation-experiment.zip --output experiments/runs/rouge_rescored
 ```
 
-`python recompute_results.py ...` is also a ROUGE rescoring entry point by default. Current full and compressed results can be rescored without regeneration; the scorer validates deterministic sentence selection and the frozen demonstration IDs. Full-context archived outputs also remain supported; old metrics are retained under `previous_metrics` when appropriate. Original result files are never overwritten.
+Current full and compressed results can be rescored without regeneration. The scorer validates the experiment protocol, actual evidence, compression spans and frozen demonstration IDs. Original result files are never overwritten.
 
 ## Data and Historical Fact-ID Evaluation
 
@@ -309,13 +307,7 @@ python evaluate_generation.py generation-experiment.zip --output experiments/run
 - `data/generation_annotations/`: the original 1,000 annotated passages, 2,898 review–aspect facts and historical fact-selection targets.
 - `data/generation_annotations/human_review.json`: 40 query-specific decisions used in the earlier fact-selection study.
 
-Historical Precision/Recall/F1, coverage-unit recall and polarity-contrast scores remain available for the report. They are separate from the current ROUGE results. Reproduce those saved scores explicitly with:
-
-```bash
-python recompute_results.py experiments/final/generation_results.json --legacy-facts --output experiments/runs/fact_report_reproduction
-```
-
-`evaluate_fact_selection.py` and the `--legacy-facts` runner option are retained for this historical protocol. The web interface always uses ROUGE.
+Historical Precision/Recall/F1, coverage-unit recall and polarity-contrast scores remain in the saved report artifacts. The old runner, scorer, compatibility commands and self-check prompts have been removed. Their source is available in Git history at commit `7f4537d`.
 
 ## Archived Fact-selection Results
 
@@ -333,24 +325,21 @@ A/B each completed 100 tasks; C/D each completed 99. See the saved outputs and [
 ## Repository Structure
 
 ```text
-rag_generator.py            Generation, citations, optional examples/compression; legacy self-check API
+rag_generator.py            Single-call generation, citations, optional examples/compression
 review_context.py           Latest review updates and helpfulness/age signals
-prompts/                    Generation, verification, revision and historical fact prompts
+prompts/                    Baseline and few-shot instructions
 context_compression.py      Local TF-IDF sentence selection and traceable spans
 generation_experiment_design.py Frozen split, demonstrations and method settings
 run_generation_experiments.py Few-shot × compression ROUGE experiment runner
 evaluate_generation.py      Deterministic ROUGE scorer and offline result evaluation
-run_fact_experiments.py      Compatibility entry; historical protocol with --legacy-facts
 experiment_web.py            Web backend, progress tracking, and ZIP export
 launch_web.py                Local launch entry point
 web/                        Web frontend
-evaluate_fact_selection.py  Archived fact-ID scorer
-recompute_results.py        ROUGE rescoring; historical scores with --legacy-facts
 data/reference_summaries/   Drafts and finalized human-reviewed English answers
 data/generation_experiment/ Fixed 20/80 split and two development demonstrations
 data/generation_annotations/ Original annotations and historical scoring references
 experiments/                Fixed inputs, source audit, and final results
-tests/                      Generation, scoring, web, and reproduction tests
+tests/                      Generation, scoring, web, and data-integrity tests
 ```
 
 ## Validation

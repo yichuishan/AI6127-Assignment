@@ -109,67 +109,55 @@ def load_results(path):
 
 
 def rescore(rows, references=None):
-    """Score saved full/compressed answers; validate evidence and retain historical metrics."""
-    from rag_generator import APPROACHES as LEGACY_APPROACHES, build_context
+    """Recompute ROUGE after validating the current experiment and actual evidence."""
+    from rag_generator import build_context
     from generation_experiment_design import (APPROACHES, EXPERIMENT_PROTOCOL, METHODS,
         load_split, validate_cases)
     from context_compression import compress_context
     refs = references if references is not None else load_references()
-    cases = {c['id']: c for c in jsonl(ROOT/'experiments/steam_generation_eval.jsonl')}
-    out, seen = copy.deepcopy(rows), set()
-    if not isinstance(out, list) or not out:
+    cases = {c['id']:c for c in jsonl(ROOT/'experiments/steam_generation_eval.jsonl')}
+    out,seen = copy.deepcopy(rows),set()
+    if not isinstance(out,list) or not out:
         raise ValueError('Expected nonempty saved generation results')
     execution = ('latency_seconds','model_calls','prompt_tokens','completion_tokens',
                  'estimated_cost_usd','final_claims','provenance_rejected',
                  'context_preparation_seconds','original_context_text_chars','context_text_chars',
                  'context_text_ratio','context_chunks')
     for row in out:
-        key = row['case_id'], row['approach'], row.get('repeat', 0)
-        if key in seen or key[0] not in refs or key[1] not in set(APPROACHES)|set(LEGACY_APPROACHES):
+        key = row['case_id'],row['approach'],row.get('repeat',0)
+        if key in seen or key[0] not in refs or key[1] not in APPROACHES:
             raise ValueError('Unknown or duplicate question/method/repeat')
+        if row.get('experiment_protocol')!=EXPERIMENT_PROTOCOL:
+            raise ValueError('Results must use the current few-shot/compression protocol')
+        validate_cases([cases[key[0]]],row.get('split'))
         seen.add(key)
-        if row['status'] == 'failed':
+        if row['status']=='failed':
             continue
-        if row['status'] != 'completed':
+        if row['status']!='completed':
             raise ValueError('Expected completed/failed generation status')
-        result = row['result']
-        expected = build_context(cases[key[0]]['results'], context_policy='full_review')
-        new_design=row.get('experiment_protocol')==EXPERIMENT_PROTOCOL
-        if key[1] in ('few_shot','compressed','combined') and not new_design:
-            raise ValueError('Missing experiment protocol for few-shot/compression results')
-        if new_design:
-            if key[1] not in APPROACHES:
-                raise ValueError('Self-check arms are not part of the current experiment')
-            validate_cases([cases[key[0]]],row.get('split'))
-            expected=build_context(cases[key[0]]['results'],context_policy='full_review',
-                include_review_metadata=True,as_of=result['context_as_of_utc'])
-            settings=METHODS[key[1]]
-            if settings['compression']:
-                if result.get('original_context_evidence')!=expected:
-                    raise ValueError('Original context differs from fixed evidence')
-                expected,info=compress_context(cases[key[0]]['query'],expected,result['compression']['requested_ratio'])
-                if info!=result['compression']:
-                    raise ValueError('Compression parameters/spans differ from deterministic construction')
-            if result.get('context_evidence')!=expected:
-                raise ValueError('Actual evidence differs from deterministic context construction')
-            example_ids=load_split()['example_ids'] if settings['few_shot'] else []
-            if result.get('few_shot_example_ids',[])!=example_ids:
-                raise ValueError('Saved demonstration IDs differ from frozen development examples')
-        if (result.get('query') != cases[key[0]]['query']
-                or result.get('context_policy','full_review') != 'full_review'
-                or result.get('context_chunk_ids') != [e['chunk_id'] for e in expected]):
-            raise ValueError('Saved answer context does not match the approved full-context references')
-        if result.get('context_evidence') is not None and not new_design:
-            visible = [{k:e.get(k) for k in ('chunk_id','text','game_name','source_url')} for e in result['context_evidence']]
-            if visible != expected:
-                raise ValueError('Saved answer evidence text differs from the approved reference context')
-        old = row.get('metrics') or {}
-        if old and any(not k.startswith('rouge') for k in old if k not in execution):
-            row.setdefault('previous_metrics', copy.deepcopy(old))
-        metrics = score_summary(result['summary'], refs[key[0]]['reference'], result['context_chunk_ids'])
+        result=row['result']
+        expected=build_context(cases[key[0]]['results'],context_policy='full_review',
+            include_review_metadata=True,as_of=result['context_as_of_utc'])
+        settings=METHODS[key[1]]
+        if settings['compression']:
+            if result.get('original_context_evidence')!=expected:
+                raise ValueError('Original context differs from fixed evidence')
+            expected,info=compress_context(cases[key[0]]['query'],expected,result['compression']['requested_ratio'])
+            if info!=result['compression']:
+                raise ValueError('Compression parameters/spans differ from deterministic construction')
+        if result.get('context_evidence')!=expected:
+            raise ValueError('Actual evidence differs from deterministic context construction')
+        example_ids=load_split()['example_ids'] if settings['few_shot'] else []
+        if result.get('few_shot_example_ids',[])!=example_ids:
+            raise ValueError('Saved demonstration IDs differ from frozen development examples')
+        if (result.get('query')!=cases[key[0]]['query'] or result.get('context_policy')!='full_review'
+                or result.get('context_chunk_ids')!=[e['chunk_id'] for e in expected]):
+            raise ValueError('Saved answer context does not match the fixed experiment')
+        old=row.get('metrics') or {}
+        metrics=score_summary(result['summary'],refs[key[0]]['reference'],result['context_chunk_ids'])
         metrics.update({k:old.get(k) for k in execution})
-        row.update(metrics=metrics, reference=refs[key[0]]['reference'],
-                   reference_id=key[0], evaluation_method=EVALUATION_METHOD)
+        row.update(metrics=metrics,reference=refs[key[0]]['reference'],
+                   reference_id=key[0],evaluation_method=EVALUATION_METHOD)
     return out
 
 

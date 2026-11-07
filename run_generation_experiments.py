@@ -14,7 +14,7 @@ from evaluate_generation import (EVALUATION_METHOD, F1_METRICS, REFERENCES, SCOR
                                  jsonl, load_references, score_summary)
 from rag_generator import PROMPTS, OpenAICompatibleClient, build_context, generate_summary, safe_error
 from generation_experiment_design import (APPROACHES, METHODS, EXPERIMENT_PROTOCOL,
-    SPLIT_PATH, EXAMPLES_PATH, design_hashes, load_split, load_examples, select_cases, validate_cases)
+    design_hashes, load_split, load_examples, select_cases, validate_cases)
 from context_compression import DEFAULT_RATIO, VERSION as COMPRESSION_VERSION, compress_context
 from review_context import context_time
 
@@ -57,12 +57,6 @@ def benchmark(cases):
     return refs
 
 
-def approach_order(arm):
-    # Offline scoring of saved historical self-check runs remains supported.
-    order = list(APPROACHES) + ['improved','verify_delete','verify_revise']
-    return order.index(arm)
-
-
 def aggregate(rows):
     groups = collections.defaultdict(list)
     for row in rows:
@@ -83,17 +77,15 @@ def aggregate(rows):
             values = [r['metrics'].get(key) for r in valid]
             result['total_'+key] = sum(values) if values and all(v is not None for v in values) else None
         table.append(result)
-    return sorted(table,key=lambda r:approach_order(r['approach']))
+    return sorted(table,key=lambda r:APPROACHES.index(r['approach']))
 
 
 def paired_comparisons(rows, bootstrap_samples=5000, seed=42):
     by = {(r['case_id'],r['approach'],r.get('repeat',0)):r for r in rows if r['status']=='completed'}
     comparisons = []
-    new_design = any(r['approach'] in ('few_shot','compressed','combined') for r in rows)
     pairs = [('baseline','few_shot'),('baseline','compressed'),('baseline','combined'),
-             ('few_shot','combined'),('compressed','combined')] if new_design else [
-             ('baseline','improved'),('improved','verify_delete'),('improved','verify_revise')]
-    metrics = (*F1_METRICS,'prompt_tokens','latency_seconds','estimated_cost_usd') if new_design else F1_METRICS
+             ('few_shot','combined'),('compressed','combined')]
+    metrics = (*F1_METRICS,'prompt_tokens','latency_seconds','estimated_cost_usd')
     for before,after in pairs:
         for metric in metrics:
             deltas = collections.defaultdict(list)
@@ -142,7 +134,7 @@ def export(out,rows):
     dump(out/'generation_results.json',rows)
     dump(out/'report_data.json',{'evaluation_method':EVALUATION_METHOD,'scoring':SCORING_CONFIG,
         'reference_sha256':hashlib.sha256(REFERENCES.read_bytes()).hexdigest(),
-        'experiment_protocol':EXPERIMENT_PROTOCOL if any(r.get('experiment_protocol')==EXPERIMENT_PROTOCOL for r in rows) else 'historical',
+        'experiment_protocol':EXPERIMENT_PROTOCOL,
         'aggregates':table,'paired_comparisons':paired,'factorial_interactions':effects})
     fields = sorted({k for r in table for k in r})
     with (out/'summary.csv').open('w',newline='',encoding='utf-8') as file:
@@ -212,7 +204,7 @@ def run(cases,out,*,client,model,approaches=APPROACHES,repeats=1,max_claims=4,se
         reference_version=refs[cases[0]['id']]['dataset_revision'],model=model,
         context_policy=BENCHMARK_CONTEXT_POLICY,include_review_metadata=True,as_of_utc=clock,
         approaches=list(approaches),repeats=repeats,max_claims=max_claims,seed=seed,
-        current_reference_in_prompt=False,fact_candidates_in_prompt=False,
+        current_reference_in_prompt=False,
         development_demonstrations_in_few_shot_prompt=True,test_references_in_prompt=False,
         context_limits={'max_context_chars':24000,'max_chunk_chars':4000},
         prompt_hashes={p:hashlib.sha256((PROMPTS/p).read_bytes()).hexdigest() for p in ('baseline.txt','few_shot.txt')},
@@ -237,13 +229,13 @@ def run(cases,out,*,client,model,approaches=APPROACHES,repeats=1,max_claims=4,se
         try:
             started = time.perf_counter()
             settings=METHODS[arm]
-            result = generate_summary(case['query'],case['results'],approach='baseline',model=model,client=client,
+            result = generate_summary(case['query'],case['results'],model=model,client=client,
                 max_claims=max_claims,input_cost_per_million=input_price,output_cost_per_million=output_price,
                 context_policy=BENCHMARK_CONTEXT_POLICY,include_review_metadata=True,as_of=clock,
                 few_shot_examples=examples if settings['few_shot'] else None,
                 compression_ratio=compression_ratio if settings['compression'] else None)
-            result['generation_approach']='baseline'
-            result['approach']=arm
+            if result['approach']!=arm:
+                raise ValueError('Generation configuration differs from the selected experiment method')
             result['experiment_protocol']=EXPERIMENT_PROTOCOL
             full = build_context(case['results'],context_policy=BENCHMARK_CONTEXT_POLICY,
                                  include_review_metadata=True,as_of=clock)

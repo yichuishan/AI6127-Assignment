@@ -1,8 +1,7 @@
 diff --git a/code/app.py b/code/app.py
-index d4de90c..68bbc34 100644
 --- a/code/app.py
 +++ b/code/app.py
-@@ -46,24 +46,36 @@ def game_names(retriever):
+@@ -46,24 +46,36 @@
      return sorted({chunk['metadata']['game_name'] for chunk in retriever.sparse.chunks})
 
  
@@ -42,7 +41,7 @@ index d4de90c..68bbc34 100644
          timings['Dense'] = (time.perf_counter() - start) * 1000
 
      if mode in ('BM25', 'Dense'):
-@@ -84,7 +96,7 @@ def search(query, mode, games, top_k, candidates, rerank_candidates, rrf_k, spar
+@@ -84,7 +96,7 @@
              timings['Rerank'] = (time.perf_counter() - start) * 1000
 
      timings['Total'] = sum(timings.values())
@@ -51,7 +50,7 @@ index d4de90c..68bbc34 100644
 
  
  def use_sample(sample):
-@@ -153,10 +165,19 @@ def render_hit(rank, hit, mode):
+@@ -153,17 +165,26 @@
              st.json({'chunk_id': hit['chunk_id'], **meta})
 
  
@@ -75,7 +74,15 @@ index d4de90c..68bbc34 100644
      ))
      if st.button('Generate summary', key='rag_summary_generate'):
          st.session_state.pop('rag_summary_answer', None)
-@@ -172,6 +193,7 @@ def render_summary(query, hits):
+         try:
+             with st.spinner('Generating an answer from the retrieved reviews...'):
+                 result = generate_summary(
+-                    query, hits, approach='improved', max_claims=4,
++                    query, hits, max_claims=4,
+                     model=os.getenv('GENERATION_MODEL', 'deepseek-v4-pro'),
+                     client=OpenAICompatibleClient(
+                         base_url=os.getenv('GENERATION_BASE_URL', 'https://api.deepseek.com')
+@@ -172,6 +193,7 @@
          except (GenerationError, ValueError) as error:
              st.error(safe_error(error)['error_message'])
          else:
@@ -83,7 +90,7 @@ index d4de90c..68bbc34 100644
              st.session_state.rag_summary_answer = (evidence_key, result)
              try:
                  output_dir = GENERATION_RESULTS_DIR / 'rag_summary'
-@@ -203,7 +225,7 @@ def main():
+@@ -203,7 +225,7 @@
          st.header('Search settings')
          mode = st.radio('Retrieval mode', MODES, help='Hybrid modes fuse BM25 and dense results with RRF')
          games = st.multiselect('Filter by game', games_all, key='games',
@@ -92,7 +99,7 @@ index d4de90c..68bbc34 100644
          top_k = st.slider('Results to show (top-k)', 1, 30, 5)
          expansion_mode = st.radio('Query expansion', list(EXPANSION_MODES), horizontal=True,
                                    help='Add aspect keywords to the BM25 and dense queries. Hierarchical only adds '
-@@ -237,6 +259,11 @@ def main():
+@@ -237,6 +259,11 @@
          st.info('Enter a query or pick a sample query to start.')
          return
 
@@ -104,7 +111,7 @@ index d4de90c..68bbc34 100644
      query = query.strip()
      expansion = expand_query(query, mode=EXPANSION_MODES[expansion_mode]) if EXPANSION_MODES[expansion_mode] else None
      sparse_query = query if expansion is None else expansion.sparse
-@@ -253,20 +280,20 @@ def main():
+@@ -253,20 +280,20 @@
      render_expansion(expansion, expansion_mode, mode)
 
      if not hits:

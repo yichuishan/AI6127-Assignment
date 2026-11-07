@@ -133,7 +133,6 @@ class WebTests(unittest.TestCase):
         self.assertEqual(manifest['evaluation_method'],'rouge_1_2_l_human_references_v1')
         self.assertIn('bilingual_synthesis_v4',manifest['reference_version'])
         self.assertIn('reference_sha256',manifest)
-        self.assertFalse(manifest['fact_candidates_in_prompt'])
         self.assertFalse(manifest['current_reference_in_prompt'])
         self.assertTrue(manifest['development_demonstrations_in_few_shot_prompt'])
         self.assertEqual(manifest['experiment_protocol'],EXPERIMENT_PROTOCOL)
@@ -143,7 +142,7 @@ class WebTests(unittest.TestCase):
         self.assertEqual(error.exception.code,400)
 
     def test_changed_upload_cannot_reuse_old_labels(self):
-        from run_fact_experiments import jsonl,BENCHMARK
+        from run_generation_experiments import jsonl,BENCHMARK
         case=jsonl(BENCHMARK)[0];case['query']='A different question'
         cfg=self.config();cfg['dataset_jsonl']=json.dumps(case)
         with self.assertRaises(urllib.error.HTTPError) as error:self.post('/api/jobs',cfg)
