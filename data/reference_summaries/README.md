@@ -4,6 +4,8 @@ This directory contains **100 assistant-drafted English reference summaries**, w
 
 All source records remain **pending human review**. They are not confirmed gold references, and ROUGE has not been computed from them. Original review evidence remains verbatim English; Chinese claim explanations are reading aids, not additional evidence.
 
+The vote-aware revision updates **54 claims across 48 questions** in both languages. When a point is attributed to a review with recorded helpful votes, the draft uses wording such as “A review with 224 helpful votes reports …” / “一条获 224 次有用投票的评论表示……”. Multiple reviews remain separate sources; votes are not counted as additional authors. Exact counts come from the saved benchmark's review metadata.
+
 ## Files
 
 - `drafts/review.html`: standalone bilingual review page, with side-by-side English/Chinese summaries, Chinese editing, evidence, browser progress, and JSONL export/import.
@@ -11,6 +13,7 @@ All source records remain **pending human review**. They are not confirmed gold 
 - `drafts/reference_review.csv`: bilingual spreadsheet review sheet.
 - `drafts/review.md`: bilingual drafts and source evidence in Markdown.
 - `drafts/manifest.json`: source hashes, version metadata, counts, preparation method, and checks.
+- `drafts/attribution_revision.json`: before/after wording and the source review IDs and helpful vote counts behind each revised claim.
 
 ## Review in Chinese
 
@@ -29,11 +32,13 @@ The page does not translate edits automatically or call an API. It keeps both la
 | Edit English directly, leaving the Chinese draft unchanged | The reviewed English text can be exported; the Chinese text is labeled as the original comparison |
 | Pending or rejected | Excluded from approved-reference export |
 
-Nineteen questions are flagged for priority review. All 100 still require human confirmation. Browser progress is saved locally; export a backup after each review session. The page can restore review records from the previous English-only version and migrate its saved browser state.
+Nineteen questions are flagged for priority review. All 100 still require human confirmation. The evidence headings show recorded helpful votes; expand a review to see publication/update timestamps and its original text. Browser progress is saved locally; export a backup after each review session.
+
+Version `bilingual_votes_v3` restores English-only and `bilingual_v2` records while preserving personal edits, reviewer names, and notes. Unedited old text is replaced by the revised draft. Earlier approvals return to **pending** so the changed attribution can be checked again. Old records remain stored under their previous browser key. Imports from this version also check `review_metadata_sha256`.
 
 ## Export Fields
 
-Every exported record retains `id`, `context_sha256`, the original English/Chinese drafts, reviewer details, decision, and notes.
+Every exported record retains `id`, `context_sha256`, `review_metadata_sha256`, `reference_policy`, the original English/Chinese drafts, reviewer details, decision, and notes.
 
 For confirmed Chinese changes:
 
@@ -45,7 +50,7 @@ For confirmed Chinese changes:
 
 Only English-ready records have a nonempty `reference` and `human_reviewed: true`. The approved-reference export excludes untranslated Chinese changes. Chinese characters are not accepted in the finalized English field.
 
-When importing translated records, `reference` is the translated English text, with `translated_reference_en` holding the same text, `translated_source_zh` holding the exact reviewed Chinese text, and `translated_by` identifying the translator. If either language changes afterward, the translation must be reconciled again. Review version `bilingual_v2` prevents the previous page from silently treating untranslated edits as English references.
+When importing translated records, `reference` is the translated English text, with `translated_reference_en` holding the same text, `translated_source_zh` holding the exact reviewed Chinese text, and `translated_by` identifying the translator. If either language changes afterward, the translation must be reconciled again. Untranslated Chinese edits remain excluded from English-reference exports.
 
 ## Important Source Distinctions
 
@@ -61,4 +66,15 @@ When importing translated records, `reference` is the translated English text, w
 
 These are 100 question-conditioned summary drafts, distinct from the 1,000 source review passages and their aspect labels. Approval should be based on evidence rather than agreement with a generation method. Keep scoring reference text free of inline citation IDs; provenance is stored separately.
 
-The same finalized English references can evaluate every method's saved summaries. Existing fixed-context experiments do not need retrieval or generation to run again. References apply only to the questions and contexts identified by their hashes.
+These drafts retain the original fixed review texts and their `context_sha256`; supplemental helpful-vote/date metadata is stored separately in `review_metadata` with its own hash. They do not change the archived fact-selection reference sets or reported scores. For a future ROUGE comparison using vote-aware references, provide the same review metadata to every generation method. Newest-update filtering requires its own matching references because this set preserves the full fixed review texts.
+
+## Validation
+
+The Python test suite checks source counts, exact quotes, vote provenance, aligned summaries, and agreement between the JSONL, HTML, CSV, and Markdown copies. An optional Node.js check exercises browser-state migration, bilingual edits, translation handling, and export/import without external packages:
+
+```bash
+python -m unittest discover -s tests -p test_reference_review.py -v
+node tests/reference_review_ui.cjs
+```
+
+Run these commands from the summarizer module root.

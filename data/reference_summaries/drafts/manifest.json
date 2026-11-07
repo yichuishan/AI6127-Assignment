@@ -9,15 +9,15 @@
   "priority_review_records": 19,
   "word_count": {
     "min": 12,
-    "median": 37.0,
-    "max": 85
+    "median": 39.0,
+    "max": 88
   },
   "source_files_sha256": {
     "experiments/steam_generation_eval.jsonl": "4c195f15f0d8082e6ba05940e57c7e15d699c16214ebd0b13efbf0944e84852a",
     "data/generation_annotations/passages.jsonl": "74916f1a94ca17f3a56cb1a5770274dc5e3c9c807c356cd549440a7b257cd080",
     "data/generation_annotations/query_annotations.jsonl": "d0e3bafd9480aa222f8048ca71694f09f57523c6e5416c0bc5182a1bc02ecec4"
   },
-  "reference_drafts_sha256": "a96bbb157d515156b7af5b2da86f678b2c372e8aacb8902bf949ea82a36f60ed",
+  "reference_drafts_sha256": "3aa6b90898f9b8bbfe8a34b1c5c7430155d539b0bf713d76a9b3cdaaa7f81390",
   "drafting_procedure": "Assistant-written from original fixed review evidence and existing query-specific scope annotations; no A/B/C/D generation output used.",
   "model_api_calls": 0,
   "automated_checks": [
@@ -27,16 +27,26 @@
     "all references pending and excluded from confirmed-reference export"
   ],
   "score_status": "ROUGE has not been computed; these drafts are not confirmed gold references.",
-  "english_draft_revision": "911438201dccc1b03ed9ed8a7633cabd114490331e12607974bd8fe149f86ff5",
-  "review_ui_version": "bilingual_v2",
+  "english_draft_revision": "ccb16cc4bb046a0d72f511b13ca2063857f190114dd312c0843335c2e73e8824",
+  "review_ui_version": "bilingual_votes_v3",
   "translated_questions": 100,
   "translated_claims": 193,
   "translation_note": "Assistant Chinese translations of questions, reference drafts, claim explanations and review notes. Original review evidence remains verbatim English.",
   "chinese_edit_policy": "Confirmed Chinese changes are exported as pending_translation with reference=null until an English translation is prepared.",
+  "previous_english_draft_revision": "911438201dccc1b03ed9ed8a7633cabd114490331e12607974bd8fe149f86ff5",
+  "review_dataset_revision": "3ea5dd04f3101e6d452e6eba1b6bf594dd0385600e825de2102f3e855215f42b",
+  "reference_policy": "vote_aware_attribution_v1",
+  "revised_records": 48,
+  "revised_claims": 54,
+  "attribution_revision_sha256": "d2a99e698a2e90a7ab441fc11697806c6c765db14f6a8d86defabda8a1103c4a",
+  "review_metadata_source": "experiments/steam_generation_eval.jsonl",
+  "legacy_review_policy": "Preserve imported edits and notes; reset prior approvals to pending for the revised drafts.",
   "interface_validation": {
-    "workflow_checks_passed": 25,
-    "english_drafts_and_evidence_unchanged": true,
+    "workflow_checks_passed": 12,
+    "source_texts_and_context_hashes_unchanged": true,
+    "legacy_approvals_reset_to_pending": true,
+    "legacy_personal_edits_preserved": true,
     "pending_chinese_edits_excluded_from_english_export": true,
-    "legacy_review_restore_supported": true
+    "current_metadata_revision_checked_on_import": true
   }
 }

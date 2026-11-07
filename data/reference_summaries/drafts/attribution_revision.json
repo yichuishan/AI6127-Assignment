@@ -1,0 +1,870 @@
+{
+  "policy": "vote_aware_attribution_v1",
+  "revised_records": 48,
+  "revised_claims": 54,
+  "changes": [
+    {
+      "id": "hybrid_rerank/q01",
+      "claim_id": "c2",
+      "previous_text": "One reviewer finds the story very well written but says it slows in the middle before picking up again.",
+      "previous_text_zh": "一位评论者认为剧情写得很好，但中段略显停滞，之后又重新精彩起来。",
+      "text": "A review with 3 helpful votes finds the story very well written but says it slows in the middle before picking up again.",
+      "text_zh": "一条获 3 次有用投票的评论认为剧情写得很好，但中段略显停滞，之后又重新精彩起来。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1903340:235727655:chunk:001",
+          "sample_id": "a625",
+          "helpful_votes": 3
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q05",
+      "claim_id": "c2",
+      "previous_text": "Another reviewer complains about the absence of skill-based matchmaking, reflecting a different complaint about how opponents are selected.",
+      "previous_text_zh": "另一位评论者则抱怨缺少基于技术水平的匹配，体现了对对手匹配方式的另一种不满。",
+      "text": "A review with 2 helpful votes complains about the absence of skill-based matchmaking, reflecting a different complaint about how opponents are selected.",
+      "text_zh": "一条获 2 次有用投票的评论则抱怨缺少基于技术水平的匹配，体现了对对手匹配方式的另一种不满。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1962663:226418944:chunk:001",
+          "sample_id": "a102",
+          "helpful_votes": 2
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q06",
+      "claim_id": "c2",
+      "previous_text": "One reviewer highlights playing and modding with friends, while another specifically qualifies their enjoyment as being with friends.",
+      "previous_text_zh": "一位评论者特别提到与朋友一起游玩和使用模组，另一位则明确表示只有和朋友一起玩才觉得不错。",
+      "text": "A review highlights playing and modding with friends, while a review with 2 helpful votes specifically qualifies its enjoyment as being with friends.",
+      "text_zh": "一条评论特别提到与朋友一起游玩和使用模组；另一条获 2 次有用投票的评论则明确表示，只有和朋友一起玩才觉得不错。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:550:236710192:chunk:001",
+          "sample_id": "a758",
+          "helpful_votes": 2
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q07",
+      "claim_id": "c1",
+      "previous_text": "Reviewers praise Red Dead Redemption 2's narrative as masterfully written and emotionally affecting, with one describing being moved to tears by its story and characters.",
+      "previous_text_zh": "评论者称赞 Red Dead Redemption 2 的叙事写作精湛、情感感染力强，其中一人表示剧情和角色让自己感动落泪。",
+      "text": "A review with 1 helpful vote praises Red Dead Redemption 2's narrative as masterfully written and emotionally affecting, describing being moved to tears by its story and characters.",
+      "text_zh": "一条获 1 次有用投票的评论称赞 Red Dead Redemption 2 的叙事写作精湛、情感感染力强，并表示剧情和角色让自己感动落泪。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1174180:236601584:chunk:001",
+          "sample_id": "a808",
+          "helpful_votes": 1
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q10",
+      "claim_id": "c1",
+      "previous_text": "The supplied reviews criticize Test Drive Unlimited Solar Crown's optimization and performance; one reports a drop to five frames after fast travel.",
+      "previous_text_zh": "这些评论批评 Test Drive Unlimited Solar Crown 的优化和性能，其中一人表示快速移动后帧率降到了 5 帧。",
+      "text": "The supplied reviews criticize Test Drive Unlimited Solar Crown's optimization and performance; a review with 3 helpful votes reports a drop to five frames after fast travel.",
+      "text_zh": "这些评论批评 Test Drive Unlimited Solar Crown 的优化和性能；其中一条获 3 次有用投票的评论表示，快速移动后帧率降到了 5 帧。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1249970:234355613:chunk:001",
+          "sample_id": "a143",
+          "helpful_votes": 3
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q10",
+      "claim_id": "c2",
+      "previous_text": "Another reviewer initially needed minimum settings and heavy DLSS for an unstable 60 FPS at 1080p on an RTX 3070 and Ryzen 5 5600X, but a later February 2026 edit reports substantial improvement.",
+      "previous_text_zh": "另一位评论者最初在 RTX 3070 和 Ryzen 5 5600X 上，需要最低设置和较大程度依赖 DLSS，才能在 1080p 下接近但无法稳定维持 60 FPS；不过，其 2026 年 2 月的后续更新表示性能已大幅改善。",
+      "text": "A review with 6 helpful votes initially reports needing minimum settings and heavy DLSS for an unstable 60 FPS at 1080p on an RTX 3070 and Ryzen 5 5600X, but its later February 2026 edit reports substantial improvement.",
+      "text_zh": "一条获 6 次有用投票的评论最初表示，在 RTX 3070 和 Ryzen 5 5600X 上，需要最低设置并较大程度依赖 DLSS，才能在 1080p 下接近但无法稳定维持 60 FPS；不过，其 2026 年 2 月的后续更新表示性能已大幅改善。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1249970:208994799:chunk:001",
+          "sample_id": "a548",
+          "helpful_votes": 6
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q11",
+      "claim_id": "c2",
+      "previous_text": "There are qualifications: one reviewer finds the newer coaster tools useful, and another says the difficult controls become easier with practice.",
+      "previous_text_zh": "但也有不同看法：一位评论者觉得新版过山车工具有用，另一位认为难上手的操作能通过练习逐渐掌握。",
+      "text": "There are qualifications: a review with 36 helpful votes finds the newer coaster tools useful, and a review with 4 helpful votes says the difficult controls become easier with practice.",
+      "text_zh": "但也有不同看法：一条获 36 次有用投票的评论认为新版过山车工具有用；另一条获 4 次有用投票的评论认为，难上手的操作能通过练习逐渐掌握。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:282560:38731072:chunk:001",
+          "sample_id": "a247",
+          "helpful_votes": 36
+        },
+        {
+          "chunk_id": "steam:282560:162616045:chunk:001",
+          "sample_id": "a520",
+          "helpful_votes": 4
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q13",
+      "claim_id": "c1",
+      "previous_text": "The supplied reviews praise Resident Evil Requiem's graphics as impressive, with one reviewer saying it still looks good on low settings.",
+      "previous_text_zh": "这些评论称赞 Resident Evil Requiem 的画面令人印象深刻，其中一位表示低画质设置下仍然很好看。",
+      "text": "The supplied reviews praise Resident Evil Requiem's graphics as impressive, including a review with 3 helpful votes that says the game still looks good on low settings.",
+      "text_zh": "这些评论称赞 Resident Evil Requiem 的画面令人印象深刻，其中一条获 3 次有用投票的评论表示，低画质设置下仍然很好看。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:3764200:236579434:chunk:001",
+          "sample_id": "a485",
+          "helpful_votes": 3
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q15",
+      "claim_id": "c3",
+      "previous_text": "One review also finds the skill trees boring despite enjoying the revised stealth and gunplay.",
+      "previous_text_zh": "一位评论者虽然喜欢改进后的潜行与射击，但仍觉得技能树无聊。",
+      "text": "A review with 2 helpful votes also finds the skill trees boring despite enjoying the revised stealth and gunplay.",
+      "text_zh": "一条获 2 次有用投票的评论虽然喜欢改进后的潜行与射击，但仍觉得技能树无聊。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1272080:235748495:chunk:001",
+          "sample_id": "a188",
+          "helpful_votes": 2
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q16",
+      "claim_id": "c1",
+      "previous_text": "The supplied Redfall reviews are negative about its story, describing it as shallow or dismissing its quality rather than identifying narrative strengths.",
+      "previous_text_zh": "这些 Redfall 评论对剧情评价负面，认为它浅薄或质量很差，没有指出明确的叙事优点。",
+      "text": "Two Redfall reviews with 493 and 2115 helpful votes criticize its story, describing it as shallow or dismissing its quality rather than identifying narrative strengths.",
+      "text_zh": "两条分别获 493 和 2115 次有用投票的 Redfall 评论对剧情评价负面，认为它浅薄或质量很差，没有指出明确的叙事优点。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1294810:138308190:chunk:001",
+          "sample_id": "a467",
+          "helpful_votes": 493
+        },
+        {
+          "chunk_id": "steam:1294810:137762212:chunk:001",
+          "sample_id": "a204",
+          "helpful_votes": 2115
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q17",
+      "claim_id": "c3",
+      "previous_text": "One review describes an arcade-shooter campaign based on collecting samples from dead enemies.",
+      "previous_text_zh": "一条评论将其描述为街机射击游戏，战役内容是从被击倒的敌人身上收集样本。",
+      "text": "A review with 7 helpful votes describes an arcade-shooter campaign based on collecting samples from dead enemies.",
+      "text_zh": "一条获 7 次有用投票的评论将其描述为街机射击游戏，战役内容是从被击倒的敌人身上收集样本。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:390340:215807397:chunk:001",
+          "sample_id": "a037",
+          "helpful_votes": 7
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q19",
+      "claim_id": "c3",
+      "previous_text": "One reviewer reports playing mostly with an AI partner and finding that it worked well.",
+      "previous_text_zh": "一位评论者表示大部分流程都与 AI 队友一起完成，并认为其表现不错。",
+      "text": "A review with 5 helpful votes reports playing mostly with an AI partner and finding that it worked well.",
+      "text_zh": "一条获 5 次有用投票的评论表示，大部分流程都与 AI 队友一起完成，并认为其表现不错。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1056960:215043836:chunk:001",
+          "sample_id": "a1000",
+          "helpful_votes": 5
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q21",
+      "claim_id": "c1",
+      "previous_text": "The supplied Spacebase DF-9 reviews complain about limited content and depth, with one saying its mechanics only sustain a few hours of play and another highlighting missing management tools and a priority queue.",
+      "previous_text_zh": "这些 Spacebase DF-9 评论抱怨内容和深度有限，其中一人认为玩法只能支撑数小时，另一人指出缺少管理工具和任务优先队列。",
+      "text": "The supplied Spacebase DF-9 reviews complain about limited content and depth: a review with 145 helpful votes says its mechanics only sustain a few hours of play, while a review with 1 helpful vote highlights missing management tools and a priority queue.",
+      "text_zh": "这些 Spacebase DF-9 评论抱怨内容和深度有限：一条获 145 次有用投票的评论认为，玩法只能支撑数小时；另一条获 1 次有用投票的评论指出，游戏缺少管理工具和任务优先队列。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:246090:12914621:chunk:001",
+          "sample_id": "a914",
+          "helpful_votes": 145
+        },
+        {
+          "chunk_id": "steam:246090:66712100:chunk:001",
+          "sample_id": "a086",
+          "helpful_votes": 1
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q21",
+      "claim_id": "c2",
+      "previous_text": "A more positive review still describes it as a fun space-station simulator.",
+      "previous_text_zh": "一条较为正面的评论仍认为它是有趣的空间站模拟游戏。",
+      "text": "A more positive review with 370 helpful votes still describes it as a fun space-station simulator.",
+      "text_zh": "一条较为正面、获 370 次有用投票的评论仍认为，它是有趣的空间站模拟游戏。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:246090:13294465:chunk:001",
+          "sample_id": "a266",
+          "helpful_votes": 370
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q23",
+      "claim_id": "c2",
+      "previous_text": "One reviewer says the game freezes whenever they try to launch it after previously playing it.",
+      "previous_text_zh": "一位评论者表示，曾经玩过一段时间后，游戏现在每次启动都会卡死。",
+      "text": "A review with 10 helpful votes says the game freezes whenever its author tries to launch it after previously playing it.",
+      "text_zh": "一条获 10 次有用投票的评论表示，曾经玩过一段时间后，游戏现在每次启动都会卡死。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:246090:105767028:chunk:001",
+          "sample_id": "a920",
+          "helpful_votes": 10
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q24",
+      "claim_id": "c2",
+      "previous_text": "They also describe glitchy controls and misaligned buildings; however, one reviewer reports no crashes personally while still finding building tools difficult to use.",
+      "previous_text_zh": "评论还提到操作故障和建筑无法对齐；不过，一位评论者表示自己没有遇到崩溃，只是仍觉得建造工具难用。",
+      "text": "Reviews also describe glitchy controls and misaligned buildings; however, a review with 14 helpful votes reports no crashes personally while still finding building tools difficult to use.",
+      "text_zh": "评论还提到操作故障和建筑无法对齐；不过，一条获 14 次有用投票的评论表示，作者自己没有遇到崩溃，只是仍觉得建造工具难用。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:282560:225697913:chunk:001",
+          "sample_id": "a513",
+          "helpful_votes": 14
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q25",
+      "claim_id": "c1",
+      "previous_text": "Reviewers praise Silksong's handcrafted art, detailed graphics, and fascinating world design, including a review that otherwise dislikes the game.",
+      "previous_text_zh": "评论者称赞 Silksong 精心绘制的美术、细致的画面和引人入胜的世界设计，甚至有不喜欢整体游戏的评论也认可这些优点。",
+      "text": "Reviewers praise Silksong's handcrafted art, detailed graphics, and fascinating world design, including a review with 13 helpful votes that otherwise dislikes the game.",
+      "text_zh": "评论者称赞 Silksong 精心绘制的美术、细致的画面和引人入胜的世界设计，其中一条获 13 次有用投票、对游戏整体持负面评价的评论也认可这些优点。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1030300:235088107:chunk:001",
+          "sample_id": "a732",
+          "helpful_votes": 13
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q28",
+      "claim_id": "c2",
+      "previous_text": "One reviewer explicitly asks for dedicated servers.",
+      "previous_text_zh": "一位评论者明确要求提供专用服务器。",
+      "text": "A review with 224 helpful votes explicitly asks for dedicated servers.",
+      "text_zh": "一条获 224 次有用投票的评论明确要求提供专用服务器。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:952070:66912827:chunk:001",
+          "sample_id": "a265",
+          "helpful_votes": 224
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q29",
+      "claim_id": "c2",
+      "previous_text": "One reviewer attributes the lack of opponents to low player numbers, no cross-play, and region restrictions, and reports rarely seeing other players at the time of their review.",
+      "previous_text_zh": "一位评论者认为对手稀少与玩家数量低、没有跨平台联机和地区限制有关，并表示在其评论发表时很少见到其他玩家。",
+      "text": "A review with 3 helpful votes attributes the lack of opponents to low player numbers, no cross-play, and region restrictions, and reports rarely seeing other players at the time of publication.",
+      "text_zh": "一条获 3 次有用投票的评论认为，对手稀少与玩家数量低、没有跨平台联机和地区限制有关，并表示在其发表时很少见到其他玩家。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1249970:234400449:chunk:001",
+          "sample_id": "a928",
+          "helpful_votes": 3
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q30",
+      "claim_id": "c1",
+      "previous_text": "Reviewers praise Hades II's soundtrack as excellent, with one comparing its quality favorably with the first game's music.",
+      "previous_text_zh": "评论者认为 Hades II 的配乐非常出色，其中一位肯定它保持了前作音乐的高水准。",
+      "text": "Reviewers praise Hades II's soundtrack as excellent, including a review with 1 helpful vote that finds the music as good as the first game's.",
+      "text_zh": "评论者认为 Hades II 的配乐非常出色，其中一条获 1 次有用投票的评论认为，它的音乐保持了前作的高水准。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1145350:236259259:chunk:001",
+          "sample_id": "a681",
+          "helpful_votes": 1
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q31",
+      "claim_id": "c2",
+      "previous_text": "One reviewer also reports network lag, packet bursts, desynchronization, and random disconnects.",
+      "previous_text_zh": "一位评论者还报告了网络延迟、数据包突发、不同步和随机断线。",
+      "text": "A review with 41 helpful votes also reports network lag, packet bursts, desynchronization, and random disconnects.",
+      "text_zh": "一条获 41 次有用投票的评论还报告了网络延迟、数据包突发、不同步和随机断线。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1962663:227694526:chunk:001",
+          "sample_id": "a022",
+          "helpful_votes": 41
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q32",
+      "claim_id": "c1",
+      "previous_text": "One supplied reviewer criticizes Monster Hunter Wilds' controls and interface compared with Monster Hunter World, but gives no specific account of a camera malfunction.",
+      "previous_text_zh": "一位评论者认为 Monster Hunter Wilds 的操作和界面不如 Monster Hunter World，但没有具体描述某种镜头故障。",
+      "text": "A review with 4 helpful votes criticizes Monster Hunter Wilds' controls and interface compared with Monster Hunter World, but gives no specific account of a camera malfunction.",
+      "text_zh": "一条获 4 次有用投票的评论认为，Monster Hunter Wilds 的操作和界面不如 Monster Hunter World，但没有具体描述某种镜头故障。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:2246340:235469218:chunk:001",
+          "sample_id": "a778",
+          "helpful_votes": 4
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q34",
+      "claim_id": "c2",
+      "previous_text": "One says units do not reliably follow movement and attack commands as intended.",
+      "previous_text_zh": "一位表示，单位不能可靠地按照预期执行移动和攻击指令。",
+      "text": "A review with 5 helpful votes says units do not reliably follow movement and attack commands as intended.",
+      "text_zh": "一条获 5 次有用投票的评论表示，单位不能可靠地按照预期执行移动和攻击指令。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:285190:231942427:chunk:001",
+          "sample_id": "a963",
+          "helpful_votes": 5
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q38",
+      "claim_id": "c1",
+      "previous_text": "Some PAYDAY 3 reviews report a turnaround from launch problems, with one now describing the game as bug-free and free of server issues.",
+      "previous_text_zh": "部分 PAYDAY 3 评论认为游戏已经从首发问题中改善，其中一位现在形容它没有 Bug，也没有服务器问题。",
+      "text": "Some PAYDAY 3 reviews report a turnaround from launch problems, including a review with 27 helpful votes that now describes the game as bug-free and free of server issues.",
+      "text_zh": "部分 PAYDAY 3 评论认为，游戏已经从首发问题中改善；其中一条获 27 次有用投票的评论现在形容它没有 Bug，也没有服务器问题。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1272080:234502972:chunk:001",
+          "sample_id": "a442",
+          "helpful_votes": 27
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q40",
+      "claim_id": "c1",
+      "previous_text": "Umbrella Corps reviewers criticize clunky controls and confusing, chaotic multiplayer; one says the small player population makes it difficult to assemble the four players needed for a match.",
+      "previous_text_zh": "Umbrella Corps 评论批评操作笨重、多人模式混乱难懂；一位表示玩家较少，难以凑齐一场对局所需的四人。",
+      "text": "Umbrella Corps reviewers criticize clunky controls and confusing, chaotic multiplayer; a review with 7 helpful votes says the small player population makes it difficult to assemble the four players needed for a match.",
+      "text_zh": "Umbrella Corps 评论批评操作笨重、多人模式混乱难懂；一条获 7 次有用投票的评论表示，玩家较少，难以凑齐一场对局所需的四人。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:390340:215807397:chunk:001",
+          "sample_id": "a037",
+          "helpful_votes": 7
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q42",
+      "claim_id": "c3",
+      "previous_text": "Other reviews criticize performance, and one prefers Monster Hunter World's graphics and overall presentation.",
+      "previous_text_zh": "其他评论批评性能，其中一人更喜欢 Monster Hunter World 的画面与整体呈现。",
+      "text": "Other reviews criticize performance, and a review with 4 helpful votes prefers Monster Hunter World's graphics and overall presentation.",
+      "text_zh": "其他评论批评性能；其中一条获 4 次有用投票的评论更喜欢 Monster Hunter World 的画面与整体呈现。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:2246340:235469218:chunk:001",
+          "sample_id": "a778",
+          "helpful_votes": 4
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q46",
+      "claim_id": "c1",
+      "previous_text": "RollerCoaster Tycoon World reviewers report large-park lag despite good hardware and 20–55 FPS on small parks on a laptop above the recommended specifications.",
+      "previous_text_zh": "RollerCoaster Tycoon World 评论者报告，即使硬件较好，大型公园仍会卡顿；另一位在超过推荐配置的笔记本上运行小型公园时，帧率为 20–55 FPS。",
+      "text": "For RollerCoaster Tycoon World, a review with 25 helpful votes reports large-park lag despite good hardware, while a review with 1 helpful vote reports 20–55 FPS on small parks on a laptop above the recommended specifications.",
+      "text_zh": "对于 RollerCoaster Tycoon World，一条获 25 次有用投票的评论报告，即使硬件较好，大型公园仍会卡顿；另一条获 1 次有用投票的评论表示，在超过推荐配置的笔记本上运行小型公园时，帧率为 20–55 FPS。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:282560:38795062:chunk:001",
+          "sample_id": "a517",
+          "helpful_votes": 25
+        },
+        {
+          "chunk_id": "steam:282560:145344646:chunk:001",
+          "sample_id": "a035",
+          "helpful_votes": 1
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q46",
+      "claim_id": "c2",
+      "previous_text": "A Test Drive Unlimited Solar Crown reviewer reports failing to reach 60 FPS on an RX 7900 XT.",
+      "previous_text_zh": "一位 Test Drive Unlimited Solar Crown 评论者表示，RX 7900 XT 也达不到 60 FPS。",
+      "text": "A Test Drive Unlimited Solar Crown review with 5 helpful votes reports failing to reach 60 FPS on an RX 7900 XT.",
+      "text_zh": "一条获 5 次有用投票的 Test Drive Unlimited Solar Crown 评论表示，RX 7900 XT 也达不到 60 FPS。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1249970:216192118:chunk:001",
+          "sample_id": "a163",
+          "helpful_votes": 5
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q51",
+      "claim_id": "c1",
+      "previous_text": "One Warzone reviewer reports an average of 65–75 FPS at maximum settings without upscaling on their own PC; that report alone does not establish whether other players encounter stuttering or FPS drops.",
+      "previous_text_zh": "一位 Warzone 评论者报告，自己的 PC 在最高设置、不启用分辨率放大时平均达到 65–75 FPS；仅凭这条报告，无法确定其他玩家是否会遇到卡顿或掉帧。",
+      "text": "A Warzone review with 2 helpful votes reports an average of 65–75 FPS at maximum settings without upscaling on its author's PC; that report alone does not establish whether other players encounter stuttering or FPS drops.",
+      "text_zh": "一条获 2 次有用投票的 Warzone 评论报告，作者的 PC 在最高设置、不启用分辨率放大时平均达到 65–75 FPS；仅凭这条报告，无法确定其他玩家是否会遇到卡顿或掉帧。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1962663:235552619:chunk:001",
+          "sample_id": "a062",
+          "helpful_votes": 2
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q52",
+      "claim_id": "c1",
+      "previous_text": "Clair Obscur: Expedition 33 combines turn-based combat with real-time parrying and dodging, so defensive timing remains important during fights.",
+      "previous_text_zh": "Clair Obscur: Expedition 33 将回合制战斗与实时招架、闪避结合，因此战斗中仍然需要把握防御时机。",
+      "text": "A review with 1 helpful vote describes Clair Obscur: Expedition 33's combination of turn-based combat with real-time parrying and dodging, so defensive timing remains important during fights.",
+      "text_zh": "一条获 1 次有用投票的评论介绍了 Clair Obscur: Expedition 33 将回合制战斗与实时招架、闪避结合的设计，因此战斗中仍然需要把握防御时机。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1903340:237380226:chunk:001",
+          "sample_id": "a113",
+          "helpful_votes": 1
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q55",
+      "claim_id": "c1",
+      "previous_text": "Reviewers praise Hades II's gorgeous art style and direction, with one finding the art more beautiful than in the first game.",
+      "previous_text_zh": "评论者称赞 Hades II 优美的美术风格与设计，其中一人认为画面比前作更漂亮。",
+      "text": "Reviewers praise Hades II's gorgeous art style and direction, including a review with 1 helpful vote that finds the art more beautiful than in the first game.",
+      "text_zh": "评论者称赞 Hades II 优美的美术风格与设计，其中一条获 1 次有用投票的评论认为，画面比前作更漂亮。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1145350:235773444:chunk:001",
+          "sample_id": "a362",
+          "helpful_votes": 1
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q59",
+      "claim_id": "c1",
+      "previous_text": "The supplied PAYDAY 3 reviews praise its PC optimization and say it runs well, with one attributing particularly good performance to the most recent engine upgrade.",
+      "previous_text_zh": "这些 PAYDAY 3 评论称赞 PC 优化并表示运行良好，其中一位将特别出色的性能归因于其所说的最近一次引擎升级。",
+      "text": "The supplied PAYDAY 3 reviews praise its PC optimization and say it runs well, including a review with 153 helpful votes; a review with 2 helpful votes attributes particularly good performance to the most recent engine upgrade.",
+      "text_zh": "这些 PAYDAY 3 评论称赞 PC 优化并表示运行良好，其中包括一条获 153 次有用投票的评论；另一条获 2 次有用投票的评论将特别出色的性能归因于其所说的最近一次引擎升级。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1272080:232722299:chunk:001",
+          "sample_id": "a798",
+          "helpful_votes": 153
+        },
+        {
+          "chunk_id": "steam:1272080:235748495:chunk:001",
+          "sample_id": "a188",
+          "helpful_votes": 2
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q62",
+      "claim_id": "c2",
+      "previous_text": "One reviewer reports smooth 1440p play on a five-year-old PC, while another reports only slight problems at higher settings.",
+      "previous_text_zh": "一位评论者报告，在使用五年的 PC 上可以流畅运行 1440p；另一位表示，只有在较高设置下出现轻微问题。",
+      "text": "Two reviews with 1 helpful vote each report smooth 1440p play on a five-year-old PC and only slight problems at higher settings, respectively.",
+      "text_zh": "两条各获 1 次有用投票的评论分别报告，在使用五年的 PC 上可以流畅运行 1440p，以及只有在较高设置下出现轻微问题。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:3764200:237413147:chunk:001",
+          "sample_id": "a272",
+          "helpful_votes": 1
+        },
+        {
+          "chunk_id": "steam:3764200:236709392:chunk:001",
+          "sample_id": "a003",
+          "helpful_votes": 1
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q63",
+      "claim_id": "c1",
+      "previous_text": "One Resident Evil Resistance reviewer describes door-frame zombie glitches that block rooms and prevent survivors from finishing a match, alongside cheating programs that disrupt regular play and progression.",
+      "previous_text_zh": "一位 Resident Evil Resistance 评论者描述了门框处丧尸异常的问题：房间被堵住，幸存者无法完成对局；评论还提到作弊程序会破坏正常游玩和成长进度。",
+      "text": "A Resident Evil Resistance review with 224 helpful votes describes door-frame zombie glitches that block rooms and prevent survivors from finishing a match, alongside cheating programs that disrupt regular play and progression.",
+      "text_zh": "一条获 224 次有用投票的 Resident Evil Resistance 评论描述了门框处丧尸异常的问题：房间被堵住，幸存者无法完成对局；评论还提到作弊程序会破坏正常游玩和成长进度。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:952070:66912827:chunk:001",
+          "sample_id": "a265",
+          "helpful_votes": 224
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q64",
+      "claim_id": "c2",
+      "previous_text": "Others find basic building a chore, the park-management experience weak, or the game unintuitive and incomplete; one still considers its coaster-building aspect decent.",
+      "previous_text_zh": "其他人觉得基础建造也很费劲、公园经营体验薄弱，或认为游戏不直观且未完成；其中一人仍认可过山车建造本身尚可。",
+      "text": "Other reviews find basic building a chore, the park-management experience weak, or the game unintuitive and incomplete; a review with 36 helpful votes still considers its coaster-building aspect decent.",
+      "text_zh": "其他评论认为基础建造很费劲、公园经营体验薄弱，或认为游戏不直观且未完成；不过，一条获 36 次有用投票的评论仍认为，过山车建造本身尚可。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:282560:38731072:chunk:001",
+          "sample_id": "a247",
+          "helpful_votes": 36
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q65",
+      "claim_id": "c1",
+      "previous_text": "Spacebase DF-9 reviewers criticize a confusing or unintuitive interface and menus, with one saying they could not get through the tutorial.",
+      "previous_text_zh": "Spacebase DF-9 评论者批评界面和菜单让人困惑、不直观，其中一位表示连教程都没有完成。",
+      "text": "Spacebase DF-9 reviews criticize a confusing or unintuitive interface and menus, including a review with 9 helpful votes whose author could not get through the tutorial.",
+      "text_zh": "Spacebase DF-9 评论批评界面和菜单让人困惑、不直观；其中一条获 9 次有用投票的评论表示，作者连教程都没有完成。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:246090:73880295:chunk:001",
+          "sample_id": "a532",
+          "helpful_votes": 9
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q67",
+      "claim_id": "c1",
+      "previous_text": "One Umbrella Corps reviewer says there is no story or lore connecting it to the main Resident Evil storyline.",
+      "previous_text_zh": "一位 Umbrella Corps 评论者表示，游戏没有与 Resident Evil 主线相联系的剧情或背景设定。",
+      "text": "An Umbrella Corps review with 7 helpful votes says there is no story or lore connecting it to the main Resident Evil storyline.",
+      "text_zh": "一条获 7 次有用投票的 Umbrella Corps 评论表示，游戏没有与 Resident Evil 主线相联系的剧情或背景设定。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:390340:215807397:chunk:001",
+          "sample_id": "a037",
+          "helpful_votes": 7
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q67",
+      "claim_id": "c2",
+      "previous_text": "Another expresses interest in more Umbrella lore and side stories rather than describing a substantial existing plot.",
+      "previous_text_zh": "另一位希望看到更多 Umbrella 公司的背景与支线故事，而不是在描述当前游戏已有丰富剧情。",
+      "text": "A review with 3 helpful votes expresses interest in more Umbrella lore and side stories rather than describing a substantial existing plot.",
+      "text_zh": "另一条获 3 次有用投票的评论希望看到更多 Umbrella 公司的背景与支线故事，而不是在描述当前游戏已有丰富剧情。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:390340:222635078:chunk:001",
+          "sample_id": "a201",
+          "helpful_votes": 3
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q68",
+      "claim_id": "c2",
+      "previous_text": "Another reviewer praises the graphics and detail.",
+      "previous_text_zh": "另一位评论者则称赞画面和细节。",
+      "text": "A review with 1 helpful vote praises the graphics and detail.",
+      "text_zh": "另一条获 1 次有用投票的评论则称赞画面和细节。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:285190:222100085:chunk:001",
+          "sample_id": "a965",
+          "helpful_votes": 1
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q71",
+      "claim_id": "c2",
+      "previous_text": "Reviewers describe its atmospheric effect positively, including one who criticizes the game's difficulty and pacing but still finds the music beautiful.",
+      "previous_text_zh": "评论者肯定音乐营造的氛围；即使一位批评游戏难度和节奏的评论者，也认为音乐很美。",
+      "text": "Reviews describe the music's atmospheric effect positively, including a review with 13 helpful votes that criticizes the game's difficulty and pacing but still finds the music beautiful.",
+      "text_zh": "评论肯定音乐营造的氛围；其中一条获 13 次有用投票的评论虽然批评游戏难度和节奏，仍认为音乐很美。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1030300:235088107:chunk:001",
+          "sample_id": "a732",
+          "helpful_votes": 13
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q72",
+      "claim_id": "c1",
+      "previous_text": "The supplied reviews praise Red Dead Redemption 2's writing, characters, and atmosphere for their emotional impact; one reviewer describes being moved to tears and reflecting on the story's themes.",
+      "previous_text_zh": "这些评论称赞 Red Dead Redemption 2 的写作、角色和氛围具有情感感染力；一人描述自己感动落泪，并思考故事的主题。",
+      "text": "The supplied reviews praise Red Dead Redemption 2's writing, characters, and atmosphere for their emotional impact; a review with 1 helpful vote describes being moved to tears and reflecting on the story's themes.",
+      "text_zh": "这些评论称赞 Red Dead Redemption 2 的写作、角色和氛围具有情感感染力；一条获 1 次有用投票的评论描述了感动落泪、并思考故事主题的体验。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1174180:236601584:chunk:001",
+          "sample_id": "a808",
+          "helpful_votes": 1
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q82",
+      "claim_id": "c2",
+      "previous_text": "One also reports lag when moving the camera; the reviews do not establish a more specific technical cause.",
+      "previous_text_zh": "一位还报告移动镜头时卡顿；这些评论没有确定更具体的技术原因。",
+      "text": "A review with 48 helpful votes also reports lag when moving the camera; the reviews do not establish a more specific technical cause.",
+      "text_zh": "一条获 48 次有用投票的评论还报告了移动镜头时卡顿；这些评论没有确定更具体的技术原因。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:282560:26722559:chunk:001",
+          "sample_id": "a883",
+          "helpful_votes": 48
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q86",
+      "claim_id": "c1",
+      "previous_text": "The supplied Redfall reviews criticize graphical bugs, unattractive graphics, and an art style that does not appeal to one reviewer.",
+      "previous_text_zh": "这些 Redfall 评论批评图形 Bug、画面难看，以及一位评论者不喜欢的美术风格。",
+      "text": "Redfall reviews with 493 and 2115 helpful votes criticize graphical bugs and unattractive graphics, respectively; a review with 2 helpful votes also dislikes the art style.",
+      "text_zh": "两条分别获 493 和 2115 次有用投票的 Redfall 评论分别批评图形 Bug 和画面难看；另一条获 2 次有用投票的评论也不喜欢它的美术风格。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1294810:138308190:chunk:001",
+          "sample_id": "a467",
+          "helpful_votes": 493
+        },
+        {
+          "chunk_id": "steam:1294810:137762212:chunk:001",
+          "sample_id": "a204",
+          "helpful_votes": 2115
+        },
+        {
+          "chunk_id": "steam:1294810:214879650:chunk:001",
+          "sample_id": "a184",
+          "helpful_votes": 2
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q88",
+      "claim_id": "c2",
+      "previous_text": "One reviewer also dislikes the reduced randomness of heists compared with PAYDAY 2, despite preferring the newer game's movement and guns.",
+      "previous_text_zh": "一位还不喜欢劫案随机性比 PAYDAY 2 少，尽管更喜欢新作的移动和枪械。",
+      "text": "A review with 2 helpful votes also dislikes the reduced randomness of heists compared with PAYDAY 2, despite preferring the newer game's movement and guns.",
+      "text_zh": "一条获 2 次有用投票的评论还不喜欢劫案随机性比 PAYDAY 2 少，尽管更喜欢新作的移动和枪械。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1272080:224355367:chunk:001",
+          "sample_id": "a786",
+          "helpful_votes": 2
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q90",
+      "claim_id": "c1",
+      "previous_text": "Some Youngblood reviewers praise solid gunplay and functional mechanics, including more dynamic movement, although one misses dual-wielding two-handed weapons.",
+      "previous_text_zh": "部分 Youngblood 评论者称赞射击扎实、机制表现正常，以及更灵活的移动，不过一人怀念双持双手武器。",
+      "text": "Some Youngblood reviews praise solid gunplay and functional mechanics, including more dynamic movement; a review with 5 helpful votes nevertheless misses dual-wielding two-handed weapons.",
+      "text_zh": "部分 Youngblood 评论称赞射击扎实、机制表现正常，以及更灵活的移动；不过，一条获 5 次有用投票的评论仍怀念双持双手武器。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1056960:215043836:chunk:001",
+          "sample_id": "a1000",
+          "helpful_votes": 5
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q91",
+      "claim_id": "c2",
+      "previous_text": "A reviewer reports exploits involving unkillable zombies in doorways that block progress, as well as cheating programs that disrupt play.",
+      "previous_text_zh": "一位报告了利用门口无法被击杀的丧尸堵住进度的漏洞，以及破坏游戏体验的作弊程序。",
+      "text": "A review with 224 helpful votes reports exploits involving unkillable zombies in doorways that block progress, as well as cheating programs that disrupt play.",
+      "text_zh": "一条获 224 次有用投票的评论报告了利用门口无法被击杀的丧尸堵住进度的漏洞，以及破坏游戏体验的作弊程序。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:952070:66912827:chunk:001",
+          "sample_id": "a265",
+          "helpful_votes": 224
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q92",
+      "claim_id": "c2",
+      "previous_text": "Reviewers also report game-breaking bugs, launch freezes, and crashes, including one session becoming broken after 13 hours of play.",
+      "previous_text_zh": "评论者还报告了破坏正常游玩的 Bug、启动卡死和崩溃，包括一场游玩 13 小时后崩溃、无法正常继续的经历。",
+      "text": "Reviews also report game-breaking bugs, launch freezes, and crashes; a review with 5 helpful votes describes a session becoming broken after 13 hours of play.",
+      "text_zh": "评论还报告了破坏正常游玩的 Bug、启动卡死和崩溃；其中一条获 5 次有用投票的评论表示，游玩 13 小时后游戏崩溃，无法正常继续。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:246090:154490838:chunk:001",
+          "sample_id": "a530",
+          "helpful_votes": 5
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q93",
+      "claim_id": "c1",
+      "previous_text": "Opinions on Solar Crown's driving differ: some criticize handling, while others enjoy the driving, with one finding the early cars decent and another appreciating how older cars feel different.",
+      "previous_text_zh": "对 Solar Crown 驾驶的看法不同：有人批评操控，也有人喜欢驾驶；其中一人觉得早期车辆手感尚可，另一人欣赏老车不同的驾驶感受。",
+      "text": "Opinions on Solar Crown's driving differ: some criticize handling, while others enjoy the driving; a review with 1 helpful vote finds the early cars decent, and a review with 4 helpful votes appreciates how older cars feel different.",
+      "text_zh": "对 Solar Crown 驾驶的看法不同：有评论批评操控，也有评论喜欢驾驶；一条获 1 次有用投票的评论认为早期车辆手感尚可，另一条获 4 次有用投票的评论欣赏老车不同的驾驶感受。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1249970:219948828:chunk:001",
+          "sample_id": "a939",
+          "helpful_votes": 1
+        },
+        {
+          "chunk_id": "steam:1249970:216349037:chunk:001",
+          "sample_id": "a183",
+          "helpful_votes": 4
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q93",
+      "claim_id": "c2",
+      "previous_text": "One reviewer initially reports unstable 60 FPS at 1080p with minimum settings and heavy DLSS on an RTX 3070 and Ryzen 5 5600X, then describes substantial improvement in a February 2026 edit.",
+      "previous_text_zh": "一位评论者最初在 RTX 3070 和 Ryzen 5 5600X 上，使用最低设置并较大程度依赖 DLSS，在 1080p 下仍无法稳定达到 60 FPS；随后在 2026 年 2 月的更新中表示性能大幅改善。",
+      "text": "A review with 6 helpful votes initially reports unstable 60 FPS at 1080p with minimum settings and heavy DLSS on an RTX 3070 and Ryzen 5 5600X, then describes substantial improvement in a February 2026 edit.",
+      "text_zh": "一条获 6 次有用投票的评论最初表示，在 RTX 3070 和 Ryzen 5 5600X 上，使用最低设置并较大程度依赖 DLSS，在 1080p 下仍无法稳定达到 60 FPS；随后在 2026 年 2 月的更新中表示性能大幅改善。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1249970:208994799:chunk:001",
+          "sample_id": "a548",
+          "helpful_votes": 6
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q94",
+      "claim_id": "c1",
+      "previous_text": "Clair Obscur: Expedition 33 receives praise for emotional storytelling and distinctive combat, though one reviewer finds the story slows in the middle before picking up again.",
+      "previous_text_zh": "Clair Obscur: Expedition 33 因富有情感的叙事和独特战斗受到称赞，不过一位觉得剧情中段变慢、之后才重新精彩。",
+      "text": "Clair Obscur: Expedition 33 receives praise for emotional storytelling and distinctive combat, though a review with 3 helpful votes finds the story slows in the middle before picking up again.",
+      "text_zh": "Clair Obscur: Expedition 33 因富有情感的叙事和独特战斗受到称赞；不过，一条获 3 次有用投票的评论认为，剧情中段变慢，之后才重新精彩。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1903340:235727655:chunk:001",
+          "sample_id": "a625",
+          "helpful_votes": 3
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q94",
+      "claim_id": "c3",
+      "previous_text": "One reviewer praises the story until Act 3 but loses interest afterward.",
+      "previous_text_zh": "一位评论者觉得第三幕之前的剧情很棒，但到了第三幕便失去了兴趣。",
+      "text": "A review with 4 helpful votes praises the story until Act 3 but reports losing interest afterward.",
+      "text_zh": "一条获 4 次有用投票的评论认为，第三幕之前的剧情很棒，但到了第三幕便失去了兴趣。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1903340:236211208:chunk:001",
+          "sample_id": "a329",
+          "helpful_votes": 4
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q95",
+      "claim_id": "c2",
+      "previous_text": "Multiplayer experiences vary: some find matches fun, challenging, or enjoyable with friends, while another reports being heavily defeated.",
+      "previous_text_zh": "多人体验不同：有人认为对局有趣、有挑战，或适合与朋友游玩，另一位则表示自己被打得很惨。",
+      "text": "Multiplayer experiences vary: some reviews find matches fun, challenging, or enjoyable with friends, while a review with 13 helpful votes reports its author being heavily defeated.",
+      "text_zh": "多人体验不同：有评论认为对局有趣、有挑战，或适合与朋友游玩；另一条获 13 次有用投票的评论则表示，作者自己被打得很惨。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:285190:214131511:chunk:001",
+          "sample_id": "a170",
+          "helpful_votes": 13
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q96",
+      "claim_id": "c2",
+      "previous_text": "Another reports 65–75 FPS at maximum settings without upscaling on their PC, illustrating a different reported experience rather than universal smoothness.",
+      "previous_text_zh": "另一位表示自己的 PC 在最高设置、不启用分辨率放大时可达到 65–75 FPS；这反映了不同的个人体验，而不是普遍流畅的结论。",
+      "text": "A review with 2 helpful votes reports 65–75 FPS at maximum settings without upscaling on its author's PC, illustrating a different reported experience rather than universal smoothness.",
+      "text_zh": "另一条获 2 次有用投票的评论表示，作者的 PC 在最高设置、不启用分辨率放大时可达到 65–75 FPS；这反映了不同的个人体验，而不是普遍流畅的结论。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:1962663:235552619:chunk:001",
+          "sample_id": "a062",
+          "helpful_votes": 2
+        }
+      ]
+    },
+    {
+      "id": "hybrid_rerank/q100",
+      "claim_id": "c1",
+      "previous_text": "Resident Evil Requiem reviewers report smooth PC performance, including 1440p on a five-year-old PC and a separate report above 100 FPS; Left 4 Dead 2 is also praised for broad hardware compatibility and optimization.",
+      "previous_text_zh": "Resident Evil Requiem 评论者报告 PC 运行流畅，包括五年旧 PC 上的 1440p 体验，以及另一人超过 100 FPS 的报告；Left 4 Dead 2 也因广泛的硬件适应性和优化受到称赞。",
+      "text": "Two Resident Evil Requiem reviews with 1 helpful vote each report smooth 1440p play on a five-year-old PC and performance above 100 FPS, respectively; Left 4 Dead 2 is also praised for broad hardware compatibility and optimization.",
+      "text_zh": "两条各获 1 次有用投票的 Resident Evil Requiem 评论分别报告，在使用五年的 PC 上可以流畅运行 1440p，以及帧率超过 100 FPS；Left 4 Dead 2 也因广泛的硬件适应性和优化受到称赞。",
+      "vote_sources": [
+        {
+          "chunk_id": "steam:3764200:237413147:chunk:001",
+          "sample_id": "a272",
+          "helpful_votes": 1
+        },
+        {
+          "chunk_id": "steam:3764200:237491820:chunk:001",
+          "sample_id": "a132",
+          "helpful_votes": 1
+        }
+      ]
+    }
+  ],
+  "source_texts_and_context_hashes_unchanged": true,
+  "source_metadata": "experiments/steam_generation_eval.jsonl",
+  "vote_interpretation": "Recorded whole-review helpful votes, not additional authors or agreement with each claim."
+}
