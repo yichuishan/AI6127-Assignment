@@ -20,15 +20,18 @@ from generation_experiment_design import APPROACHES, EXPERIMENT_PROTOCOL
 
 
 class ScriptedModel:
-    def __init__(self,**kwargs):pass
+    def __init__(self,**kwargs):
+        self.lock=threading.Lock();self.count=0
 
     def complete(self,messages,model,temperature):
         assert 'evidence verifier' not in messages[0]['content']
+        with self.lock:
+            self.count+=1;first=self.count==1
         payload=json.loads(messages[1]['content'])
         assert 'reference' not in payload
         e=payload['evidence'][0]
         answer={'claims':[{'text':'A review describes the game experience.', 'chunk_ids':[e['chunk_id']]}]}
-        return {'content':json.dumps(answer),'usage':{'prompt_tokens':100,'completion_tokens':20}}
+        return {'content':'{}' if first else json.dumps(answer),'usage':{'prompt_tokens':100,'completion_tokens':20}}
 
 
 def main():
@@ -53,10 +56,15 @@ def main():
                 page.locator('#full-preset').click();assert page.locator('#limit').input_value()=='18'
                 page.locator('#split').select_option('test')
                 page.locator('#limit').fill('1')
+                assert page.locator('#concurrency').get_attribute('max')=='500'
+                assert page.locator('#max-retries').input_value()=='2'
+                page.locator('#concurrency').fill('3')
                 page.locator('#api-key').fill('browser-test-secret-not-real')
                 page.locator('#start').click()
                 expect(page.locator('#status')).to_have_text('已完成',timeout=30000)
-                assert page.locator('#api-calls').inner_text()=='4'
+                assert page.locator('#api-calls').inner_text()=='5'
+                assert page.locator('#retry-requests').inner_text()=='1'
+                assert page.locator('#active-requests').inner_text()=='0 / 3'
                 assert page.locator('#aggregates tr').count()==4
                 assert page.locator('#events details').count()==4
                 assert page.locator('#api-key').input_value()==''
@@ -69,8 +77,12 @@ def main():
                     assert 'results/few_shot_examples.json' in z.namelist()
                     manifest=json.loads(z.read('results/manifest.json'))
                     assert manifest['experiment_protocol']==EXPERIMENT_PROTOCOL
+                    assert manifest['concurrency']==3 and manifest['max_retries']==2
+                    execution=json.loads(z.read('results/run_summary.json'))
+                    assert execution['request_totals']['model_calls']==5
                     rows=json.loads(z.read('results/generation_results.json'))
                     assert {r['approach'] for r in rows}==set(APPROACHES)
+                    assert sorted(r['attempt_count'] for r in rows)==[1,1,1,2]
                     assert rescore(rows)==rows
                     for name in z.namelist():assert b'browser-test-secret-not-real' not in z.read(name)
                 page.screenshot(path='/tmp/ai6127-fewshot-web-desktop.png',full_page=True)
@@ -81,7 +93,7 @@ def main():
                 browser.close()
         finally:
             httpd.shutdown();httpd.server_close();worker.join()
-    print('Real Chromium: split selection, four one-call arms, progress, ROUGE, ZIP, offline rescoring, secret exclusion and mobile layout passed.')
+    print('Real Chromium: split selection, four arms, parallel settings, failed-response retry, progress, ROUGE, ZIP, offline rescoring, secret exclusion and mobile layout passed.')
 
 
 if __name__=='__main__':main()

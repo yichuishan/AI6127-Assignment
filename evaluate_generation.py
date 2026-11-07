@@ -122,7 +122,7 @@ def rescore(rows, references=None):
     execution = ('latency_seconds','model_calls','prompt_tokens','completion_tokens',
                  'estimated_cost_usd','final_claims','provenance_rejected',
                  'context_preparation_seconds','original_context_text_chars','context_text_chars',
-                 'context_text_ratio','context_chunks')
+                 'context_text_ratio','context_chunks','attempt_count','retry_count')
     for row in out:
         key = row['case_id'],row['approach'],row.get('repeat',0)
         if key in seen or key[0] not in refs or key[1] not in APPROACHES:

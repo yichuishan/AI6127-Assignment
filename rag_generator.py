@@ -7,6 +7,7 @@ import math
 import os
 import socket
 import ssl
+from email.utils import parsedate_to_datetime
 from urllib.error import HTTPError, URLError
 from pathlib import Path
 import time
@@ -64,7 +65,7 @@ ERROR_MESSAGES = {
     'http_403': '服务拒绝访问（403）：检查账户权限或网络限制。',
     'http_404': '接口或模型不存在（404）：检查 API 基础地址和模型名。',
     'http_422': '请求参数不被接受（422）：检查模型和参数兼容性。',
-    'http_429': '请求被限流或配额不足（429），本程序不会自动付费重试。',
+    'http_429': '请求被限流或配额不足（429），请降低并发或检查配额。',
     'http_5xx': '模型服务暂时异常（5xx），请稍后重试。',
     'http_error': '模型 API 返回 HTTP 错误。',
     'timeout': '模型请求超时；思考模式可关闭或增加请求超时。',
@@ -75,16 +76,20 @@ ERROR_MESSAGES = {
     'empty_content': 'API 返回空白正文；可能是 JSON 模式输出空白或思考耗尽预算。',
     'invalid_json': '模型正文不是有效 JSON，无法解析。',
     'invalid_claims': '模型未返回符合要求的 claims 列表，或观点数超过限制。',
+    'invalid_citations': '模型返回了无效观点或未提供当前证据中的有效来源 ID。',
 }
 
 
 class GenerationError(RuntimeError):
     """Safe structured errors; never retain raw provider bodies or credentials."""
-    def __init__(self, message, *, code='generation_error', http_status=None, stage=None):
+    def __init__(self, message, *, code='generation_error', http_status=None, stage=None,
+                 retry_after_seconds=None):
         super().__init__(message)
         self.code = code if code in ERROR_MESSAGES else 'generation_error'
         self.http_status = http_status
         self.stage = stage
+        self.retry_after_seconds=retry_after_seconds if (type(retry_after_seconds) in (float,int)
+            and math.isfinite(retry_after_seconds) and retry_after_seconds>=0) else None
 
 
 def safe_error(error):
@@ -208,7 +213,16 @@ class OpenAICompatibleClient:
             code = 'http_' + str(status)
             if code not in ERROR_MESSAGES:
                 code = 'http_5xx' if 500 <= status < 600 else 'http_error'
-            raise GenerationError(ERROR_MESSAGES[code], code=code, http_status=status) from None
+            delay=None
+            header=error.headers.get('Retry-After') if error.headers else None
+            if header:
+                try:delay=float(header)
+                except (TypeError,ValueError):
+                    try:delay=parsedate_to_datetime(header).timestamp()-time.time()
+                    except (TypeError,ValueError,OverflowError):pass
+                if delay is not None and (not math.isfinite(delay) or delay<0):delay=None
+            raise GenerationError(ERROR_MESSAGES[code], code=code, http_status=status,
+                                  retry_after_seconds=delay) from None
         except (TimeoutError, socket.timeout):
             raise GenerationError(ERROR_MESSAGES['timeout'], code='timeout') from None
         except URLError as error:
@@ -228,7 +242,7 @@ class OpenAICompatibleClient:
             return {'content': content, 'usage': data.get('usage', {})}
         except GenerationError:
             raise
-        except (KeyError, IndexError, TypeError, ValueError):
+        except (KeyError, IndexError, TypeError, ValueError, AttributeError):
             raise GenerationError(ERROR_MESSAGES['response_schema'], code='response_schema') from None
 
 
@@ -322,8 +336,9 @@ def generate_summary(query, hits, *, model=None, client=None,
         except GenerationError as error:
             error.stage = 'generate'
             raise
+        usage=response.get('usage')
         result['stage_calls'].append({'stage':'generate','model':model,
-            'latency_seconds':round(time.perf_counter()-call_started,6),'usage':response.get('usage') or {}})
+            'latency_seconds':round(time.perf_counter()-call_started,6),'usage':usage if isinstance(usage,dict) else {}})
         try:
             output = json.loads(response['content'])
             if not isinstance(output,dict):

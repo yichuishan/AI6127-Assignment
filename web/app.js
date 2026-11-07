@@ -1,6 +1,7 @@
 const $ = id => document.getElementById(id);
 const names={baseline:'Baseline',few_shot:'Few-shot',compressed:'Compression',combined:'Few-shot + compression'};
 const protocol='fewshot_compression_2x2_v1';
+const executionProtocol='concurrent_retry_v1';
 let splitSizes={test:80,development:18};
 let activeJob=null,pollTimer=null;
 const rate=x=>typeof x==='number'&&Number.isFinite(x)?`${(x*100).toFixed(1)}%`:'—';
@@ -11,7 +12,7 @@ function estimate(){
  const n=number('limit')*number('repeats');
  const calls=n*arms.length;
  $('estimate').textContent=`${n*arms.length} 项实验输出`;
- $('call-estimate').textContent=`生成请求 ${calls} 次 · 评分 0 次模型调用`;
+ $('call-estimate').textContent=`基础请求 ${calls} 次 · 含重试最多 ${calls*(1+number('max-retries'))} 次 · 并发 ${number('concurrency')} · 评分 0 次模型调用`;
 }
 async function request(path,body){
  const response=await fetch(path,body===undefined?{cache:'no-store'}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -23,7 +24,9 @@ function render(job){
  $('progress').value=pct;$('completed').textContent=`${job.completed} / ${job.total||'—'}`;
  $('api-calls').textContent=job.api_calls;$('failed').textContent=job.failed;$('scored').textContent=job.scored||0;
  $('stage').textContent=job.stop_reason||job.stage;
- if(job.split)$('run-info').textContent=`本次：${job.split==='test'?'正式测试':'开发调参'} · 压缩目标保留 ${rate(job.compression_ratio)} · ${job.model}`;
+ $('active-requests').textContent=`${job.active_requests||0} / ${job.concurrency||1}`;
+ $('retry-requests').textContent=job.retry_requests||0;
+ if(job.split)$('run-info').textContent=`本次：${job.split==='test'?'正式测试':'开发调参'} · 压缩目标保留 ${rate(job.compression_ratio)} · ${job.model} · 并发 ${job.concurrency||1}`;
  $('status').textContent=({running:'运行中',completed:job.failed?'已结束 · 有失败项':'已完成',stopped:'已停止',failed:'运行失败'})[job.status]||job.status;
  const elapsed=Math.max(0,Math.floor((job.finished_at||Date.now()/1000)-job.started_at));
  $('elapsed').textContent=`${String(Math.floor(elapsed/60)).padStart(2,'0')}:${String(elapsed%60).padStart(2,'0')}`;
@@ -38,7 +41,7 @@ function render(job){
    const head=document.createElement('div');head.className='event-head';
    const b=document.createElement('b');b.textContent=names[event.approach];
    const id=document.createElement('small');id.textContent=event.case_id;
-   const status=document.createElement('span');status.textContent=event.status==='failed'?`失败 · ${event.error_type}`:'✓ ROUGE 评分完成';
+   const status=document.createElement('span');status.textContent=event.status==='failed'?`失败 · ${event.error_type} · ${event.attempt_count||1} 次尝试`:`✓ ROUGE 评分完成${event.retry_count?' · 重试 '+event.retry_count+' 次':''}`;
    head.append(b,id,status);article.append(head);
    const add=text=>{const p=document.createElement('p');p.textContent=text;article.append(p);};
    if(event.error_message)add(`${event.error_stage||'generation'} · ${event.error_code||''}：${event.error_message}`);
@@ -73,7 +76,7 @@ $('experiment-form').addEventListener('submit',async event=>{
  try{
   const arms=[...document.querySelectorAll('[name=arm]:checked')].map(x=>x.value);if(!arms.length)throw new Error('请至少选择一种方法。');
   const file=$('dataset-file').files[0];if(file&&file.size>9000000)throw new Error('文件须小于9 MB。');
-  const body={experiment_protocol:protocol,split:$('split').value,compression_ratio:number('compression-ratio'),evaluation_method:'rouge_1_2_l_human_references_v1',base_url:$('base-url').value,model:$('model').value,api_key:$('api-key').value,
+  const body={experiment_protocol:protocol,execution_protocol:executionProtocol,concurrency:number('concurrency'),max_retries:number('max-retries'),split:$('split').value,compression_ratio:number('compression-ratio'),evaluation_method:'rouge_1_2_l_human_references_v1',base_url:$('base-url').value,model:$('model').value,api_key:$('api-key').value,
    limit:number('limit'),repeats:number('repeats'),max_claims:number('max-claims'),approaches:arms,
    max_output_tokens:number('max-output-tokens'),timeout:number('timeout'),thinking:$('thinking').value,
    input_price:number('input-price'),output_price:number('output-price'),dataset_jsonl:file?await file.text():''};
@@ -81,4 +84,4 @@ $('experiment-form').addEventListener('submit',async event=>{
  }catch(e){alertMessage(e.message);$('start').disabled=false;}
 });
 $('stop').onclick=async()=>{if(!activeJob)return;$('stop').disabled=true;try{const result=await request(`/api/jobs/${activeJob.id}/stop`,{});$('stage').textContent=result.message;}catch(e){alertMessage(e.message);$('stop').disabled=false;}};
-(async()=>{estimate();try{const info=await request('/api/info');if(info.evaluation_method!=='rouge_1_2_l_human_references_v1'||info.experiment_protocol!==protocol){$('start').disabled=true;alertMessage('当前服务仍是旧版实验。请停止旧进程，重新运行 python launch_web.py，再刷新网页。');return;}splitSizes=info.splits;$('limit').max=splitSizes[$('split').value];$('dataset-info').textContent=`${info.development_total} 题开发 · ${info.splits.test} 题测试 · ${info.example_ids.length} 个固定示例 · ROUGE 本地评分`;$('source-status').textContent=info.dataset_status;const jobs=info.jobs.sort((a,b)=>b.started_at-a.started_at);if(jobs.length)render(jobs[0]);}catch(e){alertMessage('无法读取实验服务，请刷新或重新启动服务。');}})();
+(async()=>{estimate();try{const info=await request('/api/info');if(info.evaluation_method!=='rouge_1_2_l_human_references_v1'||info.experiment_protocol!==protocol||info.execution_protocol!==executionProtocol){$('start').disabled=true;alertMessage('当前服务仍是旧版实验。请停止旧进程，重新运行 python launch_web.py，再刷新网页。');return;}splitSizes=info.splits;$('limit').max=splitSizes[$('split').value];$('dataset-info').textContent=`${info.development_total} 题开发 · ${info.splits.test} 题测试 · ${info.example_ids.length} 个固定示例 · ROUGE 本地评分`;$('source-status').textContent=info.dataset_status;const jobs=info.jobs.sort((a,b)=>b.started_at-a.started_at);if(jobs.length)render(jobs[0]);}catch(e){alertMessage('无法读取实验服务，请刷新或重新启动服务。');}})();

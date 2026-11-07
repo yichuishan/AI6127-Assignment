@@ -192,7 +192,7 @@ Fields such as `mode`, `filters`, `params`, `expansion`, and `timings_ms` remain
 
 ## Evaluation
 
-The summarization experiment compares four independent one-call methods: `baseline`, `few_shot`, `compressed`, and `combined`. They share the baseline prompt and citation schema. The web experiment does not run the historical self-check methods.
+The summarization experiment compares four independent generation methods: `baseline`, `few_shot`, `compressed`, and `combined`. They share the baseline prompt and citation schema. The web experiment does not run the historical self-check methods.
 
 The fixed 100-question benchmark has a frozen stratified split: 20 development questions (q06 and q24 are demonstrations; 18 questions remain for tuning) and 80 test questions. Few-shot methods receive only the two development demonstrations. The current question's reference answer is used solely for local ROUGE-1/2/L scoring. All nine precision/recall/F1 scores, actual API tokens, latency, text retention and optional cost are exported.
 
@@ -201,8 +201,10 @@ The original evidence uses `context_policy="full_review"` and `include_review_me
 From `code/`, after configuring the generation API:
 
 ```bash
-python generation/rag_summary/run_generation_experiments.py --output ../data/generation_results/rag_summary/fewshot_compression_test --split test --limit 80 --compression-ratio 0.6 --repeats 1 --max-claims 4 --base-url https://api.deepseek.com --model deepseek-v4-pro
+python generation/rag_summary/run_generation_experiments.py --output ../data/generation_results/rag_summary/fewshot_compression_test --split test --limit 80 --compression-ratio 0.6 --concurrency 20 --max-retries 2 --repeats 1 --max-claims 4 --base-url https://api.deepseek.com --model deepseek-v4-pro
 ```
+
+Web and CLI experiments default to 20 concurrent tasks (configurable 1–500) and two retries after the initial request. Retries use the same prompt for transient failures, invalid JSON/claims or invalid source IDs. Valid abstention is not retried. Per-task latency and usage include attempts; attempt histories and run totals are exported. Configuration/account errors stop new requests; other final failures do not stop the run.
 
 Use `--split development --limit 18` to try settings. Run the same workflow with progress and ZIP download through `python generation/rag_summary/launch_web.py`. Restart an older server and refresh after updating.
 
@@ -214,7 +216,7 @@ python generation/rag_summary/evaluate_generation.py generation-experiment.zip -
 
 Outputs include the exact data split, demonstrations, original and actual evidence, all ROUGE scores, execution metrics, five paired comparisons and the two-factor interaction. Archived fact-ID result files remain available in `experiments/final/`; the old evaluation code and compatibility entry points have been removed.
 
-Use new output directories. Upload the updated complete `rag_summary/` module, including `context_compression.py`, `generation_experiment_design.py`, `prompts/few_shot.txt`, `data/generation_experiment/` and the reviewed references. Full settings are in `rag_summary/README.md`.
+Use new output directories. Upload the updated complete `rag_summary/` module, including `experiment_execution.py`, `context_compression.py`, `generation_experiment_design.py`, `prompts/few_shot.txt`, `data/generation_experiment/` and the reviewed references. Full settings are in `rag_summary/README.md`.
 
 The classification contributor should document the classification interface, execution commands, and evaluation alongside this summarization interface.
 

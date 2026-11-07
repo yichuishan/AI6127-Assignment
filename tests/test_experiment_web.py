@@ -12,6 +12,7 @@ import zipfile
 
 from experiment_web import Application, endpoint, server
 from generation_experiment_design import EXPERIMENT_PROTOCOL, APPROACHES
+from experiment_execution import EXECUTION_PROTOCOL
 
 
 class Model:
@@ -46,7 +47,7 @@ class WebTests(unittest.TestCase):
         req=urllib.request.Request(self.url+path,json.dumps(data).encode(),{'Content-Type':'application/json','Origin':self.url})
         return json.loads((client or self.client).open(req).read())
     def config(self):
-        return {'experiment_protocol':EXPERIMENT_PROTOCOL,'api_key':'secret-web-test-only','base_url':'https://api.example.com/v1/chat/completions',
+        return {'experiment_protocol':EXPERIMENT_PROTOCOL,'execution_protocol':EXECUTION_PROTOCOL,'concurrency':1,'api_key':'secret-web-test-only','base_url':'https://api.example.com/v1/chat/completions',
                 'model':'scripted','limit':1,'repeats':1,'max_claims':2}
     def wait(self,jid):
         for _ in range(200):
@@ -107,14 +108,14 @@ class WebTests(unittest.TestCase):
         cfg2=self.app.jobs[job['id']].directory/'results/checkpoint.jsonl'
         self.assertEqual(json.loads(cfg2.read_text())['error_code'],'http_402')
 
-    def test_three_failures_stop_remaining_tasks(self):
+    def test_unexpected_failures_are_recorded_without_stopping_other_tasks(self):
         class Broken(Model):
             def complete(self,*a,**kw): raise RuntimeError('do-not-serialize-this-secret')
         self.app.factory=Broken
         job=self.post('/api/jobs',self.config());state=self.wait(job['id'])
-        self.assertEqual(state['status'],'stopped')
-        self.assertEqual(state['completed'],3);self.assertEqual(state['failed'],3)
-        self.assertIn('stop_reason',state)
+        self.assertEqual(state['status'],'completed')
+        self.assertEqual(state['completed'],4);self.assertEqual(state['failed'],4)
+        self.assertNotIn('stop_reason',state)
         self.assertNotIn('do-not-serialize-this-secret',json.dumps(state))
 
     def test_single_generator_transport_and_no_evaluator_config(self):
@@ -180,7 +181,7 @@ class WebTests(unittest.TestCase):
         demo=next(c for c in cases if c['id']==load_split()['example_ids'][0])
         development=select_cases(cases,'development')[0]
         for update in ({'experiment_protocol':'old'}, {'approaches':['verify_revise']},
-                       {'compression_ratio':.1}, {'compression_ratio':True},
+                       {'compression_ratio':.1}, {'compression_ratio':True}, {'concurrency':0}, {'concurrency':501}, {'max_retries':3}, {'execution_protocol':'old'},
                        {'split':'all'}, {'limit':81},
                        {'dataset_jsonl':json.dumps(demo)},
                        {'dataset_jsonl':json.dumps(development)}):
@@ -200,5 +201,51 @@ class WebTests(unittest.TestCase):
         self.assertEqual(row['split'],'development')
         self.assertIn(row['case_id'],load_split()['development_ids'])
         self.assertNotIn(row['case_id'],load_split()['example_ids'])
+
+    def test_parallel_retry_progress_and_attempts_are_in_download(self):
+        counts={};lock=threading.Lock()
+        class Recovering(Model):
+            def complete(self,messages,*a,**kw):
+                key=messages[1]['content']
+                with lock:
+                    counts[key]=counts.get(key,0)+1;n=counts[key]
+                time.sleep(.02)
+                response=super().complete(messages,*a,**kw)
+                if n==1:response['content']='{}'
+                return response
+        self.app.factory=Recovering
+        cfg=self.config();cfg.update(concurrency=2,max_retries=2)
+        job=self.post('/api/jobs',cfg);state=self.wait(job['id'])
+        self.assertEqual(state['status'],'completed')
+        self.assertEqual((state['api_calls'],state['retry_requests'],state['failed']),(8,4,0))
+        self.assertEqual(state['peak_active_requests'],2)
+        self.assertEqual(state['active_requests'],0)
+        raw=self.client.open(self.url+'/api/jobs/'+job['id']+'/download').read()
+        with zipfile.ZipFile(io.BytesIO(raw)) as z:
+            self.assertIn('results/run_summary.json',z.namelist())
+            rows=json.loads(z.read('results/generation_results.json'))
+            self.assertTrue(all(r['attempt_count']==2 and r['metrics']['prompt_tokens']==20 for r in rows))
+            self.assertNotIn(b'secret-web-test-only',b''.join(z.read(n) for n in z.namelist()))
+
+    def test_stop_drains_inflight_parallel_requests_without_dispatching_more(self):
+        entered=threading.Event();release=threading.Event();lock=threading.Lock();count=0
+        class Slow(Model):
+            def complete(self,*a,**kw):
+                nonlocal count
+                with lock:
+                    count+=1
+                    if count==2:entered.set()
+                release.wait(3)
+                return super().complete(*a,**kw)
+        self.app.factory=Slow
+        cfg=self.config();cfg['concurrency']=2
+        job=self.post('/api/jobs',cfg)
+        try:
+            self.assertTrue(entered.wait(2))
+            self.post('/api/jobs/'+job['id']+'/stop',{})
+        finally:release.set()
+        state=self.wait(job['id'])
+        self.assertEqual((state['status'],state['completed'],count),('stopped',2,2))
+        self.assertEqual(state['active_requests'],0)
 
 if __name__=='__main__':unittest.main()
