@@ -276,7 +276,8 @@ def generate_summary(query, hits, *, approach='verify_revise', model=None, clien
                      max_context_chars=24000, max_chunk_chars=4000,
                      input_cost_per_million=None, output_cost_per_million=None, max_claims=12,
                      fact_candidates=None, context_policy='latest_update', as_of=None,
-                     include_review_metadata=False):
+                     include_review_metadata=False, few_shot_examples=None,
+                     compression_ratio=None):
     """Generate, verify/delete or verify/revise/reverify using the same model/client."""
     started = time.perf_counter()
     if not isinstance(query, str) or not query.strip() or len(query) > 8000:
@@ -293,6 +294,20 @@ def generate_summary(query, hits, *, approach='verify_revise', model=None, clien
     context = build_context(hits, max_context_chars, max_chunk_chars,
                             context_policy=context_policy, as_of=clock,
                             include_review_metadata=include_review_metadata)
+    original_context = context
+    compression = None
+    if compression_ratio is not None:
+        try:
+            from .context_compression import compress_context
+        except ImportError:
+            from context_compression import compress_context
+        context, compression = compress_context(query, context, compression_ratio)
+    if few_shot_examples is not None and (not isinstance(few_shot_examples,list)
+            or not few_shot_examples or any(not isinstance(e,dict)
+                or not isinstance(e.get('case_id'),str) or not isinstance(e.get('question'),str)
+                or not isinstance(e.get('evidence'),list) or not isinstance(e.get('response'),dict)
+                for e in few_shot_examples)):
+        raise ValueError('Few-shot examples must contain case_id, question, evidence and response')
     sources = {x['chunk_id']: x for x in context}
     fact_mode = fact_candidates is not None
     if fact_mode:
@@ -309,6 +324,14 @@ def generate_summary(query, hits, *, approach='verify_revise', model=None, clien
                              'provenance_valid_claims': 0, 'retained_original_claims': 0,
                              'revised_claims': 0, 'semantic_discarded_claims': 0}}
     result['context_policy'] = context_policy
+    result['context_preparation_seconds'] = round(time.perf_counter()-started,6)
+    if compression is not None:
+        result['compression'] = compression
+        result['original_context_evidence'] = original_context
+    if compression is not None or metadata_enabled:
+        result['context_evidence'] = context
+    if few_shot_examples is not None:
+        result['few_shot_example_ids'] = [e['case_id'] for e in few_shot_examples]
     if include_review_metadata: result['include_review_metadata'] = True
     if metadata_enabled:
         result['context_evidence'] = context
@@ -331,6 +354,9 @@ def generate_summary(query, hits, *, approach='verify_revise', model=None, clien
         if fact_mode:
             system += '\n' + (PROMPTS / 'fact_selection.txt').read_text(encoding='utf-8')
             payload = dict(payload, fact_candidates=fact_candidates)
+        if few_shot_examples is not None and stage == 'generate':
+            system += '\n' + (PROMPTS / 'few_shot.txt').read_text(encoding='utf-8')
+            payload = dict(payload, examples=few_shot_examples)
         messages = [{'role': 'system', 'content': system},
                     {'role': 'user', 'content': json.dumps(payload, ensure_ascii=False)}]
         call_started = time.perf_counter()

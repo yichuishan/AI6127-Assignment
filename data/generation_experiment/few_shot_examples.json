@@ -1,0 +1,79 @@
+[
+  {
+    "case_id": "hybrid_rerank/q06",
+    "question": "Is Left 4 Dead 2 still fun to play with friends?",
+    "evidence": [
+      {
+        "chunk_id": "steam:550:236186888:chunk:001",
+        "text": "Like every Valve game it holds up very well, is still a blast to play with friends, and mod. Runs great, looks good, lots of content, and most importantly is FUN. Pick it up.",
+        "game_name": "Left 4 Dead 2",
+        "source_url": "https://steamcommunity.com/profiles/76561198062146411/recommended/550/"
+      },
+      {
+        "chunk_id": "steam:550:236710192:chunk:001",
+        "text": "boring ,\nIt's waste to buy at 2026\nthere are lot many other games for co-op horror zombie\nLot many see best reviews and think it's very nice\nBut only with friends somehow good 💯\n\nIt's better to play f2p Team fortress 2,Dota 2,Cs2 compared to this .",
+        "game_name": "Left 4 Dead 2",
+        "source_url": "https://steamcommunity.com/profiles/76561199182541687/recommended/550/"
+      }
+    ],
+    "response": {
+      "claims": [
+        {
+          "text": "Yes—playing with friends remains a strong reason to enjoy Left 4 Dead 2, with cooperative play and mods providing shared fun even when the experience feels less appealing alone.",
+          "chunk_ids": [
+            "steam:550:236186888:chunk:001",
+            "steam:550:236710192:chunk:001"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "case_id": "hybrid_rerank/q24",
+    "question": "What technical problems ruin RollerCoaster Tycoon World?",
+    "evidence": [
+      {
+        "chunk_id": "steam:282560:38731072:chunk:001",
+        "text": "Rollercoaster tycoon world is a terrible amusement park management game, however, it is a decent rollercoaster building game. The controls are glitchy and horrible, the buildings dont align properly, and the paths are stupid. The new rollercoaster building tools are useful to some and are definitely a benifit, but, they are shadowed due how bad the 'usual' controls can be used. The graphics are decent as is the framerate (100+ fps pretty much constantly) The peeps look like ♥♥♥♥ tough. In my opinion Planet coaster and the previous RCT are far surperior in every aspect (espicially Planet coaster). If you like Park management games as much as i do then this game could be worth the $5NZL price, but, you'll only get a few hours gameplay max.",
+        "game_name": "RollerCoaster Tycoon World",
+        "source_url": "https://steamcommunity.com/profiles/76561198133521373/recommended/282560/"
+      },
+      {
+        "chunk_id": "steam:282560:225697913:chunk:001",
+        "text": "Play RollerCoaster Tycoon 1, 2, 3 or Planet Coaster(s) instead. This game could've had potential if they ever fixed anything. Building paths, rides, ANYTHING, is all janky and doesn't work how you want it to. I had no issues with crashes as others have stated but the game is not cooperating with me trying to build. $5 I'd say it fair to mess around with but dont expect a GOOD game. Main menu reminds me of some shovelware from the wii era.",
+        "game_name": "RollerCoaster Tycoon World",
+        "source_url": "https://steamcommunity.com/profiles/76561198138564302/recommended/282560/"
+      },
+      {
+        "chunk_id": "steam:282560:205463392:chunk:001",
+        "text": "This is truly the WORST game I've ever played. This game is so horribly optimized, it constantly freezes, and or crashes. I only bought it while it was on sale for $4 because I've heard the bad reviews. It's honestly tragic to see how far RollerCoaster Tycoon has fallen. Do yourself a favor and stay away form this game! Buy Planet Coaster, or any of the 1-3 installments of the original RollerCoaster Tycoon games.",
+        "game_name": "RollerCoaster Tycoon World",
+        "source_url": "https://steamcommunity.com/profiles/76561198315545239/recommended/282560/"
+      },
+      {
+        "chunk_id": "steam:282560:38795062:chunk:001",
+        "text": "Planet coaster is better. RCT World is just too buggy, badly optimised, and missing features planet coaster has. The game is not optimized at all, and lags once you make a large park even if you have good hardware\nedit: phrasing",
+        "game_name": "RollerCoaster Tycoon World",
+        "source_url": "https://steamcommunity.com/profiles/76561198078984896/recommended/282560/"
+      }
+    ],
+    "response": {
+      "claims": [
+        {
+          "text": "RollerCoaster Tycoon World's technical problems affect both stability and building: freezes, crashes and poor optimization occur alongside large-park lag, including on good hardware.",
+          "chunk_ids": [
+            "steam:282560:205463392:chunk:001",
+            "steam:282560:38795062:chunk:001"
+          ]
+        },
+        {
+          "text": "Glitchy tools and misaligned buildings further disrupt construction, although some accounts report building problems without experiencing crashes.",
+          "chunk_ids": [
+            "steam:282560:38731072:chunk:001",
+            "steam:282560:225697913:chunk:001"
+          ]
+        }
+      ]
+    }
+  }
+]

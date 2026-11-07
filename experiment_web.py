@@ -13,7 +13,10 @@ import time
 from urllib.parse import urlparse
 import zipfile
 
-from rag_generator import APPROACHES, OpenAICompatibleClient, safe_error
+from rag_generator import OpenAICompatibleClient, safe_error
+from generation_experiment_design import (APPROACHES, EXPERIMENT_PROTOCOL, load_split,
+    select_cases, validate_cases)
+from context_compression import DEFAULT_RATIO
 from run_generation_experiments import jsonl, run, benchmark, aggregate
 from evaluate_generation import EVALUATION_METHOD, load_references
 
@@ -64,11 +67,8 @@ class LiveClient:
         job = self.job
         if job.stop.is_set():
             raise Cancelled()
-        system = messages[0]['content']
-        stage = ('证据核验' if 'evidence verifier' in system else
-                 '修订观点' if 'Repair one rejected' in system else '基于评论生成总结')
         with job.lock:
-            job.state.update(stage=stage, api_calls=job.state['api_calls'] + 1)
+            job.state.update(stage='基于评论生成总结', api_calls=job.state['api_calls'] + 1)
         response = self.transport.complete(messages, model, temperature)
         with job.lock:
             job.state['successful_api_calls'] += 1
@@ -80,6 +80,8 @@ class Job:
         self.owner, self.directory = owner, directory
         self.lock, self.stop = threading.Lock(), threading.Event()
         self.state = {'id': directory.name, 'status': 'running', 'completed': 0, 'total': 0,
+                      'experiment_protocol':EXPERIMENT_PROTOCOL,'split':data['split'],
+                      'compression_ratio':data['compression_ratio'],'model':data['model'],
                       'failed': 0, 'scored':0, 'aggregates':[], 'api_calls': 0, 'successful_api_calls': 0,
                       'stage': '准备输入', 'events': [], 'started_at': time.time()}
         self.thread = threading.Thread(target=self.execute, args=(data, factory), daemon=True)
@@ -114,7 +116,8 @@ class Job:
             rows=run(cases,self.directory/'results',client=client,model=data['model'],
                 approaches=data['approaches'],repeats=data['repeats'],max_claims=data['max_claims'],
                 input_price=data['input_price'],output_price=data['output_price'],config=public_config,
-                progress=progress,stop_requested=self.stop.is_set)
+                progress=progress,stop_requested=self.stop.is_set,
+                split=data['split'],compression_ratio=data['compression_ratio'])
             with self.lock:
                 self.state.update(status='stopped' if self.stop.is_set() else 'completed',
                     stage='已停止' if self.stop.is_set() else 'ROUGE 总结实验结束',aggregates=aggregate(rows))
@@ -138,10 +141,13 @@ class Application:
 
     def start(self, owner, data):
         allowed={'api_key','base_url','model','repeats','max_output_tokens','timeout','thinking',
-                 'max_claims','limit','approaches','input_price','output_price','dataset_jsonl','evaluation_method'}
+                 'max_claims','limit','approaches','input_price','output_price','dataset_jsonl','evaluation_method',
+                 'experiment_protocol','split','compression_ratio'}
         if set(data)-allowed:raise ValueError('Unsupported experiment option')
         if data.get('evaluation_method',EVALUATION_METHOD)!=EVALUATION_METHOD:
             raise ValueError('评测版本不匹配，请重启服务并刷新网页。')
+        if data.get('experiment_protocol')!=EXPERIMENT_PROTOCOL:
+            raise ValueError('实验已改为少样本提示 × 上下文压缩，请重启服务并刷新网页。')
         key=data.get('api_key','')
         if not isinstance(key,str) or not key.strip() or len(key)>4096:raise ValueError('请输入 API Key。')
         data['api_key']=key.strip();data['base_url']=endpoint(data.get('base_url',''))
@@ -154,7 +160,14 @@ class Application:
         data['thinking']=data.get('thinking','auto')
         if data['thinking'] not in ('auto','disabled','enabled'):raise ValueError('思考模式无效。')
         data['max_claims']=integer(data.get('max_claims',4),1,12)
-        limit=integer(data.get('limit',3),1,100)
+        data['split']=data.get('split','test')
+        if data['split'] not in ('test','development'):raise ValueError('数据划分无效。')
+        available=select_cases(jsonl(DEFAULT_DATASET),data['split'])
+        limit=integer(data.get('limit',3),1,len(available))
+        ratio=data.get('compression_ratio',DEFAULT_RATIO)
+        if type(ratio) not in (float,int) or not math.isfinite(ratio) or not .2<=ratio<=1:
+            raise ValueError('评论文本保留比例应在 0.2–1 之间。')
+        data['compression_ratio']=ratio
         arms=data.get('approaches',list(APPROACHES))
         if not isinstance(arms,list) or not arms or len(set(arms))!=len(arms) or any(a not in APPROACHES for a in arms):
             raise ValueError('实验方法无效。')
@@ -164,11 +177,12 @@ class Application:
             if value is not None and (type(value) not in (float,int) or not math.isfinite(value) or value<0):raise ValueError('价格无效。')
             data[name]=value
         text=data.pop('dataset_jsonl','')
-        cases=[json.loads(line) for line in text.splitlines() if line.strip()] if text else jsonl(DEFAULT_DATASET)
+        cases=[json.loads(line) for line in text.splitlines() if line.strip()] if text else available
         cases=cases[:limit]
         if not cases or any(not isinstance(c,dict) or not isinstance(c.get('id'),str) for c in cases) or len({c['id'] for c in cases})!=len(cases):
             raise ValueError('案例 ID 无效或重复。')
         benchmark(cases)
+        validate_cases(cases,data['split'])
         # Discard any extra uploaded fields; persist the known canonical cases only.
         canonical={c['id']:c for c in jsonl(DEFAULT_DATASET)}
         data['cases']=[canonical[c['id']] for c in cases]
@@ -226,9 +240,13 @@ def server(host='127.0.0.1', port=8080, application=None):
             if path == '/api/info':
                 cases = jsonl(DEFAULT_DATASET)
                 refs=load_references()
+                split=load_split()
                 return self.send(200, {'cases': len(cases), 'reference_count':len(refs),
+                    'experiment_protocol':EXPERIMENT_PROTOCOL,
+                    'splits':{'test':len(split['test_ids']),'development':len(split['development_ids'])-len(split['example_ids'])},
+                    'development_total':len(split['development_ids']),'example_ids':split['example_ids'],
                     'evaluation_method':EVALUATION_METHOD,'reference_version':next(iter(refs.values()))['dataset_revision'],
-                    'dataset_status': '100 条人工核验英文参考答案；使用对应的完整固定评论及票数、日期元数据。模型不接收参考答案或事实候选 ID。',
+                    'dataset_status': '固定划分：20 题开发（2 题作示例、18 题可调参），80 题测试。少样本仅使用开发示例，当前题参考答案不发送给模型。压缩从原始固定评论中抽取整句并保留来源。',
                     'dataset_access': json.loads((ROOT/'experiments/dataset_access.json').read_text()) if (ROOT/'experiments/dataset_access.json').exists() else None,
                     'jobs': [j.snapshot() for j in app.jobs.values() if j.owner == owner]})
             parts = path.strip('/').split('/')

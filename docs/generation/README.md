@@ -142,7 +142,7 @@ The returned dictionary contains:
 | Field | Content |
 |---|---|
 | `summary` | Answer text with inline `[chunk_id]` citations |
-| `claims` | Retained claims, supporting `chunk_ids`, and evidence quotes for B/C/D |
+| `claims` | Retained claims, supporting `chunk_ids`, and evidence quotes when the live `improved`/self-check API is used |
 | `citations` | Unique cited passage IDs and available source URLs |
 | `status` | `ok`, `abstained`, or `no_evidence` |
 | `usage` | Available input/output token counts |
@@ -193,15 +193,19 @@ Fields such as `mode`, `filters`, `params`, `expansion`, and `timings_ms` remain
 
 ## Evaluation
 
-The summarization web interface and `run_generation_experiments.py` now score ROUGE-1, ROUGE-2 and ROUGE-L against 100 finalized human-reviewed English references. Precision, recall and F1 are stored for each metric; the web interface shows macro F1 percentages. Scoring removes citation-ID markers, lowercases English alphanumeric tokens and does not use stemming. It is computed locally without an evaluation model.
+The summarization experiment compares four independent one-call methods: `baseline`, `few_shot`, `compressed`, and `combined`. They share the baseline prompt and citation schema. The web experiment does not run the historical self-check methods.
 
-The benchmark preserves the reference-matched full fixed review text (`context_policy="full_review"`, `include_review_metadata=True`) and supplies helpful-vote/date metadata. Reference answers and fact candidates are not sent to the model. The integrated live app separately applies its required game scope and latest-update policy. Changed retrieval contexts need matching reference review.
+The fixed 100-question benchmark has a frozen stratified split: 20 development questions (q06 and q24 are demonstrations; 18 questions remain for tuning) and 80 test questions. Few-shot methods receive only the two development demonstrations. The current question's reference answer is used solely for local ROUGE-1/2/L scoring. All nine precision/recall/F1 scores, actual API tokens, latency, text retention and optional cost are exported.
 
-From `code/`, run a new experiment after configuring the generation API:
+The original evidence uses `context_policy="full_review"` and `include_review_metadata=True`. Compression methods locally select related sentences with TF-IDF and redundancy reduction, preferring adjacent sentences within a configurable text budget (default 0.6). Original IDs, metadata and exact selected text remain traceable through character spans. The live app's selected-game and latest-update policies operate separately.
+
+From `code/`, after configuring the generation API:
 
 ```bash
-python generation/rag_summary/run_generation_experiments.py --output ../data/generation_results/rag_summary/rouge_run --limit 100 --repeats 1 --max-claims 4 --base-url https://api.deepseek.com --model deepseek-v4-pro
+python generation/rag_summary/run_generation_experiments.py --output ../data/generation_results/rag_summary/fewshot_compression_test --split test --limit 80 --compression-ratio 0.6 --repeats 1 --max-claims 4 --base-url https://api.deepseek.com --model deepseek-v4-pro
 ```
+
+Use `--split development --limit 18` to try settings. Run the same workflow with progress and ZIP download through `python generation/rag_summary/launch_web.py`. Restart an older server and refresh after updating.
 
 Rescore a result ZIP without API calls:
 
@@ -209,13 +213,13 @@ Rescore a result ZIP without API calls:
 python generation/rag_summary/evaluate_generation.py generation-experiment.zip --output ../data/generation_results/rag_summary/rouge_rescored
 ```
 
-Historical fact-ID evaluation remains available for reproducing the earlier report:
+Outputs include the exact data split, demonstrations, original and actual evidence, all ROUGE scores, execution metrics, five paired comparisons and the two-factor interaction. Historical fact-ID evaluation remains available:
 
 ```bash
 python generation/rag_summary/recompute_results.py generation/rag_summary/experiments/final/generation_results.json --legacy-facts --output ../data/generation_results/rag_summary/fact_report_reproduction
 ```
 
-Use new output directories. Upload the updated complete `rag_summary/` module, including `evaluate_generation.py`, `run_generation_experiments.py` and `data/reference_summaries/reviewed/`. Full settings and output descriptions are in `rag_summary/README.md`.
+Use new output directories. Upload the updated complete `rag_summary/` module, including `context_compression.py`, `generation_experiment_design.py`, `prompts/few_shot.txt`, `data/generation_experiment/` and the reviewed references. Full settings are in `rag_summary/README.md`.
 
 The classification contributor should document the classification interface, execution commands, and evaluation alongside this summarization interface.
 

@@ -10,6 +10,7 @@ import zipfile
 from evaluate_generation import (EVALUATION_METHOD, load_references, load_results,
                                  rescore, score_summary, strip_citations, tokenize)
 from run_generation_experiments import BENCHMARK, aggregate, benchmark, jsonl, paired_comparisons, run
+from generation_experiment_design import APPROACHES, EXPERIMENT_PROTOCOL, select_cases
 
 
 class SummaryModel:
@@ -73,9 +74,9 @@ class RougeScorerTests(unittest.TestCase):
 
 class RougeExperimentTests(unittest.TestCase):
     def setUp(self):
-        self.case = jsonl(BENCHMARK)[0]
+        self.case = select_cases(jsonl(BENCHMARK))[0]
 
-    def test_drafts_are_shared_references_never_enter_model_and_scores_match(self):
+    def test_four_independent_calls_only_development_examples_and_scores_match(self):
         with tempfile.TemporaryDirectory() as tmp:
             model = SummaryModel();out=Path(tmp)/'run'
             rows = run([self.case],out,client=model,model='scripted',as_of='2026-11-07T00:00:00Z')
@@ -87,6 +88,10 @@ class RougeExperimentTests(unittest.TestCase):
                 p = json.loads(messages[1]['content'])
                 self.assertNotIn('fact_candidates',p)
                 self.assertNotIn('reference',p)
+                self.assertNotIn('evidence verifier',messages[0]['content'])
+                if 'examples' in p:
+                    self.assertEqual(len(p['examples']),2)
+                    self.assertNotIn(self.case['id'],[e['case_id'] for e in p['examples']])
                 self.assertNotIn(reference,messages[1]['content'])
                 self.assertNotIn('STRUCTURED FACT SELECTION',messages[0]['content'])
                 self.assertIn('helpful_votes',p['evidence'][0])
@@ -94,6 +99,9 @@ class RougeExperimentTests(unittest.TestCase):
             for row in rows:
                 expected=score_summary(row['result']['summary'],reference,row['result']['context_chunk_ids'])
                 self.assertNotIn('selected_fact_ids',row['result'])
+                self.assertEqual(row['experiment_protocol'],EXPERIMENT_PROTOCOL)
+                self.assertEqual(len(row['result']['stage_calls']),1)
+                self.assertFalse(row['result']['validation']['semantic_check'])
                 for k,v in expected.items():self.assertAlmostEqual(row['metrics'][k],v)
             report=json.loads((out/'report_data.json').read_text())
             self.assertEqual(report['evaluation_method'],EVALUATION_METHOD)
@@ -102,6 +110,8 @@ class RougeExperimentTests(unittest.TestCase):
             self.assertNotIn('selected_fact_ids',(out/'predictions.jsonl').read_text())
             manifest=json.loads((out/'manifest.json').read_text())
             self.assertFalse(manifest['fact_candidates_in_prompt'])
+            self.assertEqual(manifest['experiment_protocol'],EXPERIMENT_PROTOCOL)
+            self.assertEqual(manifest['split'],'test')
             self.assertEqual(manifest['scoring']['stemming'],False)
             self.assertEqual(rescore(rows),rows)
 
