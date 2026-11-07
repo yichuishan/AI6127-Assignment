@@ -25,6 +25,8 @@ Configure the API environment variables below before making this call. Run integ
 
 Pass the original question and the same final `hits` list displayed by the app. Each hit is a dictionary with:
 
+The updated app requires at least one explicitly selected game before retrieval or generation. It passes the selected games as a `game_name` filter to both sparse and dense search, restricts candidates before fusion/reranking, and checks final evidence again before generation. Multiple selected games support comparisons. `metadata.game_name` is required at this app boundary; missing or out-of-scope game identities are excluded. Saved answers record `retrieval_filters`.
+
 | Key | Content and use |
 |---|---|
 | `chunk_id` | Required. Original passage ID, retained in citations |
@@ -60,7 +62,7 @@ The API must support OpenAI-compatible Chat Completions and JSON object output. 
 
 ### Streamlit integration
 
-Replace the contents of the existing placeholder container with the block below. Keep the classification component's UI alongside the summary. The app already imports `json` and `streamlit as st`, and defines `query` and `hits`.
+Use the tested replacement `app.py` and patch supplied in `rag_summary/integration/`, based on group `main` commit `ab5844e`. For a manual integration, require a game selection before search and pass the `game_name` filter to both retrievers. The block below handles generation in the existing container. Keep the classification component's UI alongside the summary. The app already imports `json` and `streamlit as st`, and defines `query`, `hits`, and the selected `games`.
 
 ```python
 import os
@@ -74,7 +76,14 @@ from generation.rag_summary.rag_generator import (
 )
 
 st.markdown("**Evidence-grounded review summary**")
-evidence_key = (query, tuple(
+if not games:
+    st.info("Select at least one target game before generating a summary.")
+    st.stop()
+hits = [h for h in hits if (h.get("metadata") or {}).get("game_name") in games]
+if not hits:
+    st.warning("No reviews match the selected games.")
+    st.stop()
+evidence_key = (query, tuple(sorted(games)), tuple(
     (h["chunk_id"], h["text"], json.dumps(h.get("metadata") or {}, sort_keys=True))
     for h in hits
 ))
@@ -92,6 +101,7 @@ if st.button("Generate summary", key="rag_summary_generate"):
                 ),
                 max_claims=4,
             )
+        result["retrieval_filters"] = {"game_name": list(games)}
         st.session_state["rag_summary_answer"] = (evidence_key, result)
         output_dir = GENERATION_RESULTS_DIR / "rag_summary"
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -123,7 +133,7 @@ Run the existing search interface from `code/`:
 streamlit run app.py
 ```
 
-Search for reviews, then click **Generate summary**. Only this button initiates generation. Streamlit reruns reuse the saved answer when the question and evidence are unchanged. The example saves the latest answer to `data/generation_results/rag_summary/latest_answer.json` through the shared `paths.py` configuration.
+Select the target game or games, search for reviews, then click **Generate summary**. Only this button initiates generation. Streamlit reruns reuse the saved answer when the question, game scope and evidence are unchanged. The example saves the latest answer to `data/generation_results/rag_summary/latest_answer.json` through the shared `paths.py` configuration.
 
 ### Generation output
 
@@ -140,6 +150,7 @@ The returned dictionary contains:
 | `stage_calls`, `claim_audit` | Generation and self-verification records |
 | `context_policy`, `context_evidence` | The selected policy and actual latest-update context used by the model |
 | `context_as_of_utc`, `review_weight_formula` | Reference time and formula used to calculate live review weights |
+| `retrieval_filters` | Selected game scope recorded by the integrated app |
 
 The `improved` configuration requires verbatim evidence quotes and validates them against the supplied passages. The other available configurations are `baseline`, `verify_delete`, and `verify_revise`. The latter two use the generation model for internal self-checking. Live generation uses the original chunk IDs for citations and does not require the benchmark's `fact_candidates`.
 

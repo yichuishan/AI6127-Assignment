@@ -6,7 +6,7 @@ This folder contains the minimal summarization integration prepared for the grou
 - `app.patch`: an alternative patch that changes only `code/app.py`.
 - `test_app_generation.py`: optional integration tests; place at `code/tests/test_app_generation.py`.
 
-The patch is based on group `main` commit `8578fec`. It adds one `render_summary()` helper, imports the existing summarizer, and calls the helper from the existing generation placeholder. All existing retrieval helpers are unchanged.
+The patch is based on group `main` commit `ab5844e`, which already includes summarization. It makes game selection mandatory, applies the selected-game filter to sparse and dense retrieval, checks candidates before fusion/reranking, and checks the final evidence again at the generation boundary.
 
 ## Apply
 
@@ -29,15 +29,17 @@ From the group repository's `code/` directory:
 streamlit run app.py
 ```
 
-Retrieve reviews, then click **Generate summary**. It generates up to four claims using the evidence-quote configuration, shows citations and review links, and provides a JSON download. The latest successful result is saved to `data/generation_results/rag_summary/latest_answer.json` through the shared `paths.py`.
+Select at least one target game, enter the question, then click **Generate summary** after retrieval. For comparisons, select the specific games to compare. Empty game selection does not trigger retrieval or generation. Reviews with missing or out-of-scope game metadata are excluded.
 
-Normal reruns reuse the stored answer. A changed question or evidence hides the previous answer. API/configuration errors leave the retrieval results usable. A local save error preserves the generated answer and its download.
+Generation produces up to four claims using the evidence-quote configuration, shows citations and review links, and provides a JSON download. The latest successful result is saved to `data/generation_results/rag_summary/latest_answer.json` through the shared `paths.py`, including the applied `retrieval_filters`.
+
+Normal reruns reuse the stored answer. A changed question, game scope, or evidence hides the previous answer. Clearing the game selection removes the stored answer. API/configuration errors leave the retrieval results usable. A local save error preserves the generated answer and its download.
 
 ## Verification
 
 Verified with Streamlit `1.66.1` using its real `AppTest` runtime and a local HTTP API implementing Chat Completions. No paid model calls were made.
 
-All 15 integration tests passed:
+All 23 integration tests passed:
 
 - Generation starts only when clicked; citations, environment settings and output files are correct.
 - Reruns reuse the result without another API call.
@@ -45,6 +47,10 @@ All 15 integration tests passed:
 - Explicit review updates reach the model without earlier opinions; selected text and timestamps are recorded in the output.
 - Helpful votes and publication-age weights reach the model and are saved with the shared reference time.
 - All four retrieval modes and the existing game filter feed the summarizer.
+- No game selection means no retrieval or model call; multiple explicitly selected games support comparisons.
+- Out-of-scope candidates are excluded even when a retriever ignores its filter argument.
+- The generation entry point also excludes foreign or unknown game metadata when called directly.
+- Changing game scope hides the old answer even if the highest-ranked review stays the same.
 - Empty retrieval, missing keys, HTTP errors, invalid JSON and invalid configuration are handled.
 - Abstention can be saved/downloaded, and file-write failures preserve the displayed answer.
 

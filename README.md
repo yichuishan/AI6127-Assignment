@@ -81,6 +81,8 @@ Run the following integration examples from the group repository's **`code/` dir
 
 Pass the original user question and the final ranked `hits` list from `app.py` directly to the summarizer. Use the same list displayed as the top review results.
 
+The ready-to-use app in [`integration/app.py`](integration/app.py) requires an explicit game selection before searching. Both sparse and dense retrieval receive `filters={"game_name": selected_games}`. Candidate and final-evidence checks exclude other games, and `render_summary(query, hits, games)` checks the scope again before generation. Select multiple games for comparisons. Each app hit needs `metadata.game_name` to pass these checks. The saved answer includes the applied `retrieval_filters`.
+
 | Retriever field | Use in summarization |
 |---|---|
 | Original `query` | The question to answer; use this rather than the expanded retrieval query |
@@ -121,7 +123,7 @@ Keep the key local. It is read from the environment and is not part of the retri
 
 ### Add Summarization to the Streamlit App
 
-In `code/app.py`, replace the contents of the **"Sentiment analysis / generated answer"** placeholder with the following block. Keep the separate sentiment-analysis module's integration alongside it. The app already defines `query`, `hits`, `json`, and `st`.
+The tested replacement app and patch are provided in [`integration/`](integration/README.md). For a manual integration, require `games` before invoking search and pass the game filter to both retrievers; the existing `search()` accepts the selected games. The block below adds the summary within the **"Sentiment analysis / generated answer"** container. Keep the separate sentiment-analysis module's integration alongside it. The app already defines `query`, `hits`, `games`, `json`, and `st`.
 
 ```python
 import os
@@ -135,7 +137,14 @@ from generation.rag_summary.rag_generator import (
 )
 
 st.markdown("**Evidence-grounded review summary**")
-evidence_key = (query, tuple(
+if not games:
+    st.info("Select at least one target game before generating a summary.")
+    st.stop()
+hits = [h for h in hits if (h.get("metadata") or {}).get("game_name") in games]
+if not hits:
+    st.warning("No reviews match the selected games.")
+    st.stop()
+evidence_key = (query, tuple(sorted(games)), tuple(
     (h["chunk_id"], h["text"], json.dumps(h.get("metadata") or {}, sort_keys=True))
     for h in hits
 ))
@@ -153,6 +162,7 @@ if st.button("Generate summary", key="rag_summary_generate"):
                 ),
                 max_claims=4,
             )
+        result["retrieval_filters"] = {"game_name": list(games)}
         st.session_state["rag_summary_answer"] = (evidence_key, result)
         output_dir = GENERATION_RESULTS_DIR / "rag_summary"
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -184,7 +194,7 @@ Start the existing group interface from `code/`:
 streamlit run app.py
 ```
 
-Search as usual, then click **Generate summary**. The button controls model calls; Streamlit reruns reuse the stored answer for the same question and evidence. Results are saved through `paths.py` to `data/generation_results/rag_summary/latest_answer.json`.
+Select the target game or games, search, then click **Generate summary**. The button controls model calls; Streamlit reruns reuse the stored answer for the same question, game scope and evidence. Results are saved through `paths.py` to `data/generation_results/rag_summary/latest_answer.json`.
 
 ### Use a Downloaded Retrieval Export
 
