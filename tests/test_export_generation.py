@@ -77,6 +77,10 @@ class ExportTests(unittest.TestCase):
         (module/'tests/old.py').write_text('old')
         sibling = module.parent/'aspect_sentiment.py'
         sibling.write_text('other contribution')
+        data = self.root/DATA_DIR
+        (data/'rag_summary').mkdir(parents=True)
+        (data/'rag_summary/steam_generation_eval.jsonl').write_text('previous benchmark')
+        (data/'queries.jsonl').write_text('retriever dataset')
         with self.assertRaises(ValueError):
             export(self.root)
         output = io.StringIO()
@@ -90,7 +94,11 @@ class ExportTests(unittest.TestCase):
             self.assertEqual((backup/MODULE_DIR/'tests/old.py').read_text(), 'old')
             self.assertFalse((module/'tests').exists())
             self.assertEqual(sibling.read_text(), 'other contribution')
-            self.assertTrue((self.root/DATA_DIR/'steam_generation_eval.jsonl').is_file())
+            self.assertTrue((data/'rag_summary_benchmark.jsonl').is_file())
+            self.assertEqual((data/'queries.jsonl').read_text(), 'retriever dataset')
+            self.assertFalse((data/'rag_summary').exists())
+            self.assertEqual((backup/DATA_DIR/'rag_summary/steam_generation_eval.jsonl').read_text(),
+                             'previous benchmark')
         finally:
             if backup:
                 shutil.rmtree(backup)

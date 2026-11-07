@@ -16,14 +16,22 @@ CODE_FILES = (
     'web/index.html', 'web/app.js', 'web/style.css',
 )
 DATA_FILES = {
-    'experiments/steam_generation_eval.jsonl': 'steam_generation_eval.jsonl',
-    'data/generation_experiment/split.json': 'generation_experiment/split.json',
-    'data/generation_experiment/few_shot_examples.json': 'generation_experiment/few_shot_examples.json',
-    'data/reference_summaries/drafts/reference_drafts.jsonl': 'reference_summaries/drafts/reference_drafts.jsonl',
-    'data/reference_summaries/reviewed/approved_references.jsonl': 'reference_summaries/reviewed/approved_references.jsonl',
+    'experiments/steam_generation_eval.jsonl': 'rag_summary_benchmark.jsonl',
+    'data/generation_experiment/split.json': 'rag_summary_split.json',
+    'data/generation_experiment/few_shot_examples.json': 'rag_summary_few_shot_examples.json',
+    'data/reference_summaries/drafts/reference_drafts.jsonl': 'rag_summary_reference_contexts.jsonl',
+    'data/reference_summaries/reviewed/approved_references.jsonl': 'rag_summary_approved_references.jsonl',
 }
 MODULE_DIR = Path('code/generation/rag_summary')
-DATA_DIR = Path('data/evaluation_dataset/rag_summary')
+DATA_DIR = Path('data/evaluation_dataset')
+# Migrate only this exporter's five previous data paths, preserving other files.
+LEGACY_FILES = (
+    'steam_generation_eval.jsonl',
+    'generation_experiment/split.json',
+    'generation_experiment/few_shot_examples.json',
+    'reference_summaries/drafts/reference_drafts.jsonl',
+    'reference_summaries/reviewed/approved_references.jsonl',
+)
 CHECK = """
 import sys
 from pathlib import Path
@@ -38,7 +46,7 @@ examples = load_examples(cases, refs)
 split = load_split()
 assert len(cases) == len(refs) == 100 and len(examples) == 2
 assert len(split['test_ids']) == 80
-assert DATA_DIR == module.parents[2]/'data/evaluation_dataset/rag_summary'
+assert DATA_DIR == module.parents[2]/'data/evaluation_dataset'
 assert RESULTS_DIR == module.parents[2]/'data/generation_results/rag_summary'
 import experiment_web
 sys.path.insert(0, str(module.parents[1]))
@@ -80,18 +88,32 @@ def export(group_root, replace=False):
         subprocess.run([sys.executable, '-I', '-B', '-c', CHECK, str(stage/MODULE_DIR)],
                        check=True, env=env, cwd=stage)
 
+        legacy = [data/'rag_summary'/name for name in LEGACY_FILES]
+        old_files = [path for path in [*(data/name for name in DATA_FILES.values()), *legacy]
+                     if path.is_file()]
         backup = None
-        if module.exists() or data.exists():
+        if module.exists() or old_files:
             backup = Path(tempfile.mkdtemp(prefix='rag-summary-backup-'))
-            for old, relative in ((module, MODULE_DIR), (data, DATA_DIR)):
-                if old.exists():
-                    shutil.copytree(old, backup/relative)
+            if module.exists():
+                shutil.copytree(module, backup/MODULE_DIR)
+            for old in old_files:
+                copy_file(old, backup/old.relative_to(root))
             print(f'Previous files backed up outside the repository: {backup}')
         if module.exists():
             shutil.rmtree(module)
         shutil.copytree(stage/MODULE_DIR, module)
         for target in DATA_FILES.values():
             copy_file(stage/DATA_DIR/target, data/target)
+        for old in legacy:
+            if old.is_file():
+                old.unlink()
+                parent = old.parent
+                while parent != data:
+                    try:
+                        parent.rmdir()
+                    except OSError:
+                        break
+                    parent = parent.parent
     print(f'Runtime: {module} (10 Python files, 2 prompts, 3 web assets)')
     print(f'Required data: {data} (5 files)')
     print('No tests, docs, app.py, API keys or saved experiment outputs copied.')

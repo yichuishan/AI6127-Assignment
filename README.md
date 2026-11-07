@@ -364,7 +364,7 @@ From this repository, export the runtime module and its required benchmark data:
 python export_generation.py --group-root /path/to/RAG_ASPA_Game_Retrieval --replace
 ```
 
-The exporter validates all 100 fixed contexts and reviewed references before copying. It places ten Python modules, two prompts, and three web assets in `code/generation/rag_summary/`, and five required data files in `data/evaluation_dataset/rag_summary/`. Tests, documentation, integration `app.py`, credentials, and saved runs are excluded. Existing module files are backed up outside the group repository before replacement; other generation modules are preserved.
+The exporter validates all 100 fixed contexts and reviewed references before copying. It places ten Python modules, two prompts, and three web assets in `code/generation/rag_summary/`. Five required data files are placed directly in `data/evaluation_dataset/`, with the `rag_summary_` prefix: `benchmark.jsonl`, `split.json`, `few_shot_examples.json`, `reference_contexts.jsonl`, and `approved_references.jsonl`. Tests, documentation, integration `app.py`, credentials, and saved runs are excluded. Replaced files are backed up outside the group repository; other generation modules and evaluation datasets are preserved. The five data files from an earlier nested export are removed after backup, and empty directories are cleaned up.
 
 Run the experiment UI from the group's `code/` directory with `python generation/rag_summary/launch_web.py`. New web runs are saved under `data/generation_results/rag_summary/`. The public `generation.rag_summary.rag_generator` import remains available for the group app. No additional Python packages are required by the exported module.
 

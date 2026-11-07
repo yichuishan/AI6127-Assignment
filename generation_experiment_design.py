@@ -2,11 +2,9 @@
 import hashlib
 import json
 from pathlib import Path
-from generation_paths import DESIGN_DIR
+from generation_paths import SPLIT_PATH, EXAMPLES_PATH
 
 ROOT = Path(__file__).resolve().parent
-SPLIT_PATH = DESIGN_DIR/'split.json'
-EXAMPLES_PATH = DESIGN_DIR/'few_shot_examples.json'
 EXPERIMENT_PROTOCOL = 'fewshot_compression_2x2_v1'
 APPROACHES = ('baseline','few_shot','compressed','combined')
 METHODS = {
