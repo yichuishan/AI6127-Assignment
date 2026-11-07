@@ -11,6 +11,7 @@ import urllib.request
 import zipfile
 
 from experiment_web import Application, endpoint, server
+from generation_experiment_design import EXPERIMENT_PROTOCOL, APPROACHES
 
 
 class Model:
@@ -18,15 +19,15 @@ class Model:
         self.key = kwargs['api_key']
     def complete(self, messages, model, temperature):
         payload = json.loads(messages[1]['content'])
+        assert 'fact_candidates' not in payload and 'reference' not in payload
         system = messages[0]['content']
         if 'Evaluate an answer' in system:
             raise AssertionError('No evaluator model may be called by this webpage')
-        elif 'evidence verifier' in system:
-            obj={'verdict':'supported','reason':'Scripted test only.'}
+        elif 'evidence verifier' in system or 'Repair one rejected' in system:
+            raise AssertionError('Self-check is not part of the current experiment')
         else:
             evidence=payload['evidence'][0]
             obj={'claims':[{'text':'A retrieved reviewer shares an opinion.', 'chunk_ids':[evidence['chunk_id']],
-                'fact_ids':[c['fact_id'] for c in payload.get('fact_candidates',[]) if c['chunk_id']==evidence['chunk_id']][:1],
                 'evidence':[{'chunk_id':evidence['chunk_id'],'quote':evidence['text'][:40]}]}]}
         return {'content':json.dumps(obj),'usage':{'prompt_tokens':10,'completion_tokens':5}}
 
@@ -45,7 +46,7 @@ class WebTests(unittest.TestCase):
         req=urllib.request.Request(self.url+path,json.dumps(data).encode(),{'Content-Type':'application/json','Origin':self.url})
         return json.loads((client or self.client).open(req).read())
     def config(self):
-        return {'api_key':'secret-web-test-only','base_url':'https://api.example.com/v1/chat/completions',
+        return {'experiment_protocol':EXPERIMENT_PROTOCOL,'api_key':'secret-web-test-only','base_url':'https://api.example.com/v1/chat/completions',
                 'model':'scripted','limit':1,'repeats':1,'max_claims':2}
     def wait(self,jid):
         for _ in range(200):
@@ -56,16 +57,23 @@ class WebTests(unittest.TestCase):
     def test_real_http_job_progress_download_and_secret_exclusion(self):
         job=self.post('/api/jobs',self.config());state=self.wait(job['id'])
         self.assertEqual(state['status'],'completed');self.assertEqual(state['completed'],4)
-        self.assertEqual(state['failed'],0);self.assertGreater(state['api_calls'],0)
+        self.assertEqual(state['failed'],0);self.assertEqual(state['api_calls'],4)
         raw=self.client.open(self.url+'/api/jobs/'+job['id']+'/download').read()
         z=zipfile.ZipFile(io.BytesIO(raw))
         self.assertIn('results/summary.csv',z.namelist())
+        self.assertIn('results/split.json',z.namelist())
+        self.assertIn('results/few_shot_examples.json',z.namelist())
         self.assertIn('results/report.md',z.namelist())
         self.assertIn('results/predictions.jsonl',z.namelist())
         self.assertIn('results/evaluation_references.jsonl',z.namelist())
         rows=[json.loads(x) for x in z.read('results/checkpoint.jsonl').splitlines()]
-        self.assertTrue(all('selected_fact_ids' in r['result'] for r in rows))
-        self.assertTrue(all('fact_selection_f1' in r['metrics'] for r in rows))
+        self.assertTrue(all('selected_fact_ids' not in r['result'] for r in rows))
+        self.assertTrue(all('rougeL_f1' in r['metrics'] for r in rows))
+        self.assertTrue(all('fact_selection_f1' not in r['metrics'] for r in rows))
+        self.assertTrue(all(r['reference'] for r in rows))
+        self.assertEqual({r['approach'] for r in rows},set(APPROACHES))
+        self.assertTrue(all(len(r['result']['stage_calls'])==1 for r in rows))
+        self.assertIn('rouge1_f1',z.read('results/summary.csv').decode())
         self.assertTrue(all('faithfulness' not in r['metrics'] for r in rows))
         for name in z.namelist():self.assertNotIn(b'secret-web-test-only',z.read(name))
         other=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
@@ -122,20 +130,34 @@ class WebTests(unittest.TestCase):
         self.assertEqual(instances[0]['timeout'],90)
         self.assertEqual(state['scored'],4)
         manifest=json.loads((self.app.jobs[job['id']].directory/'results/manifest.json').read_text())
-        self.assertEqual(manifest['evaluation_method'],'exact_fact_id_matching_human_review_v1')
-        self.assertEqual(manifest['reference_version'],'human_review_v1')
-        self.assertIn('human_review_hash',manifest)
+        self.assertEqual(manifest['evaluation_method'],'rouge_1_2_l_human_references_v1')
+        self.assertIn('bilingual_synthesis_v4',manifest['reference_version'])
+        self.assertIn('reference_sha256',manifest)
+        self.assertFalse(manifest['current_reference_in_prompt'])
+        self.assertTrue(manifest['development_demonstrations_in_few_shot_prompt'])
+        self.assertEqual(manifest['experiment_protocol'],EXPERIMENT_PROTOCOL)
         self.assertFalse(any(k.startswith('judge_') for k in manifest))
         cfg=self.config();cfg['judge_model']='qwen3.8-max'
         with self.assertRaises(urllib.error.HTTPError) as error:self.post('/api/jobs',cfg)
         self.assertEqual(error.exception.code,400)
 
     def test_changed_upload_cannot_reuse_old_labels(self):
-        from run_fact_experiments import jsonl,BENCHMARK
+        from run_generation_experiments import jsonl,BENCHMARK
         case=jsonl(BENCHMARK)[0];case['query']='A different question'
         cfg=self.config();cfg['dataset_jsonl']=json.dumps(case)
         with self.assertRaises(urllib.error.HTTPError) as error:self.post('/api/jobs',cfg)
         self.assertEqual(error.exception.code,400)
+
+    def test_wrong_scoring_protocol_is_rejected_before_any_job_starts(self):
+        cfg=self.config();cfg['evaluation_method']='exact_fact_id_matching_human_review_v1'
+        with self.assertRaises(urllib.error.HTTPError) as error:self.post('/api/jobs',cfg)
+        self.assertEqual(error.exception.code,400)
+        self.assertEqual(self.app.jobs,{})
+        info=json.loads(self.client.open(self.url+'/api/info').read())
+        self.assertEqual(info['reference_count'],100)
+        self.assertEqual(info['splits'],{'test':80,'development':18})
+        self.assertEqual(info['experiment_protocol'],EXPERIMENT_PROTOCOL)
+        self.assertEqual(info['evaluation_method'],'rouge_1_2_l_human_references_v1')
 
     def test_stop_and_report_partial_results(self):
         entered, release=threading.Event(),threading.Event()
@@ -150,5 +172,33 @@ class WebTests(unittest.TestCase):
         release.set();state=self.wait(job['id'])
         self.assertEqual(state['status'],'stopped');self.assertLess(state['completed'],state['total'])
         self.assertTrue(self.client.open(self.url+'/api/jobs/'+job['id']+'/download').read())
+
+    def test_old_protocol_arms_examples_and_wrong_partition_are_rejected_before_calls(self):
+        from generation_experiment_design import load_split, select_cases
+        from run_generation_experiments import BENCHMARK, jsonl
+        cases=jsonl(BENCHMARK)
+        demo=next(c for c in cases if c['id']==load_split()['example_ids'][0])
+        development=select_cases(cases,'development')[0]
+        for update in ({'experiment_protocol':'old'}, {'approaches':['verify_revise']},
+                       {'compression_ratio':.1}, {'compression_ratio':True},
+                       {'split':'all'}, {'limit':81},
+                       {'dataset_jsonl':json.dumps(demo)},
+                       {'dataset_jsonl':json.dumps(development)}):
+            cfg=self.config();cfg.update(update)
+            with self.assertRaises(urllib.error.HTTPError) as error:self.post('/api/jobs',cfg)
+            self.assertEqual(error.exception.code,400)
+        self.assertEqual(self.app.jobs,{})
+
+    def test_development_runs_are_saved_separately_from_test(self):
+        from generation_experiment_design import load_split
+        cfg=self.config();cfg.update(split='development',approaches=['few_shot'])
+        job=self.post('/api/jobs',cfg);state=self.wait(job['id'])
+        self.assertEqual(state['status'],'completed')
+        self.assertEqual(state['api_calls'],1)
+        out=self.app.jobs[job['id']].directory/'results'
+        row=json.loads((out/'generation_results.json').read_text())[0]
+        self.assertEqual(row['split'],'development')
+        self.assertIn(row['case_id'],load_split()['development_ids'])
+        self.assertNotIn(row['case_id'],load_split()['example_ids'])
 
 if __name__=='__main__':unittest.main()

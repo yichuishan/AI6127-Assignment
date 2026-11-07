@@ -1,8 +1,8 @@
 # AI6127: Evidence-grounded Review Summarization
 
-Final experiment code for comparing four RAG summarization methods with fixed retrieved evidence and deterministic fact-ID evaluation against references refined through human review.
+Experiment code for a 2 × 2 study of few-shot prompting and extractive context compression, evaluated with ROUGE-1/2/L, token usage, latency and cost. The 100 reviewed questions are split into 20 development questions and 80 test questions.
 
-Requires **Python 3.10+**. The project uses only the Python standard library; no evaluator model or third-party Python packages are required.
+Requires **Python 3.10+**. Generation and ROUGE scoring use only the Python standard library; no evaluator model or third-party runtime packages are required.
 
 Unless stated otherwise, run commands from the directory containing this README. In the group repository, that directory is `code/generation/rag_summary/`. The integration examples below explicitly run from `code/`.
 
@@ -14,20 +14,26 @@ python launch_web.py
 
 Once the browser opens, enter the generation API URL, model name, and API key. Set the number of questions, repetitions, and maximum claims per answer, then start the experiment to view progress and download the results ZIP.
 
-The default settings are `https://api.deepseek.com` and `deepseek-v4-pro`, with thinking automatically disabled for the official DeepSeek V4 API. Start with the default three questions. For the full experiment, select 100 questions, one repetition, and at most four claims per answer.
+The default settings are `https://api.deepseek.com` and `deepseek-v4-pro`, with thinking automatically disabled for the official DeepSeek V4 API. Start with the default three questions. For the final experiment, select the test split, 80 questions, one repetition, and at most four claims per answer. The development split contains 18 runnable questions; two additional development questions are reserved as demonstrations. Restart any old server after updating and refresh the page.
 
 API keys remain in process memory and are excluded from result files and browser storage. Keep the terminal open while using the interface; press Ctrl+C to stop the server.
 
 ## Generation Methods
 
-| Method | Workflow |
-|---|---|
-| A · Baseline | Generate claims with source citations and fact IDs |
-| B · Evidence quotes | Strengthen the evidence instructions and require validated verbatim quotes |
-| C · Verify-delete | Start from B's draft, check each claim, and delete claims that fail verification |
-| D · Verify-revise | Start from B's draft, repair claims that fail verification, and check the revisions again |
+| Method | Few-shot demonstrations | Current evidence |
+|---|---|---|
+| Baseline | None | Complete fixed reviews |
+| Few-shot | Two fixed development examples | Complete fixed reviews |
+| Compression | None | Locally selected review sentences |
+| Few-shot + compression | Two fixed development examples | Locally selected review sentences |
 
-B/C/D share the initial draft. C/D use the generation model for self-checking; final scoring uses the same deterministic algorithm for every method, with no separate evaluator model.
+All four methods share the baseline prompt, source-citation schema, model, metadata reference time and output limit. Each question/method/repetition makes one independent generation call. There is no draft sharing, self-check, revision or evaluator call in this experiment.
+
+The examples teach coherent synthesis, preserving qualifications and contrasting experiences. They use development questions q06 and q24 and their reviewed English answers. The current question's reference answer is never sent to generation. Example IDs cannot be scored in either split.
+
+Context compression fits TF-IDF locally to the current review sentences and ranks them against the question. A greedy relevance/redundancy criterion uses weight 0.8 for relevance and 0.2 for similarity to selected sentences. It first attempts to retain each sentence's immediate neighbors, then the complete sentence if the window exceeds the budget. Source order, IDs, metadata and exact text are retained. Separate extracts are joined with a visible gap marker. The default budget is 60% of original review-text characters; one indivisible sentence may exceed that budget and is flagged. A ratio of 1 retains the original context exactly. No reference text, aspect label or model is used for compression.
+
+Actual API input tokens include prompts, metadata and demonstrations. The text-retention ratio concerns review text only. Both are reported independently.
 
 The generation interface is provided by `rag_generator.py`:
 
@@ -37,13 +43,12 @@ from rag_generator import generate_summary
 result = generate_summary(
     question,
     ranked_passages,
-    approach="improved",
     model="deepseek-v4-pro",
     max_claims=4,
 )
 ```
 
-Each entry in `ranked_passages` requires `chunk_id` and `text`, with optional `game_name` and `source_url` fields inside `metadata`. For structured experiments, the runner adds eight aspect candidates per review without presence or sentiment labels. Reference answers and human sentiment labels are excluded from model inputs.
+Each entry in `ranked_passages` requires `chunk_id` and `text`, with optional `game_name` and `source_url` fields inside `metadata`. The ROUGE runner sends the question, review evidence and source metadata. Few-shot configurations also send the two development demonstrations. The current question's reference answer and fact candidates are never included.
 
 ### Latest Review Updates
 
@@ -51,9 +56,9 @@ Live generation defaults to `context_policy="latest_update"`. Before context tru
 
 When a review contains explicit substantive `Edit:` or `Update:` blocks, only its latest visible update and continuation are provided to the model. Dated blocks use their dates when all updates are dated; otherwise their order determines the latest update. Repeated and numbered headings such as `Edit Edit:` and `(Edit 2:` are supported. Typo/phrasing-only notes do not replace the substantive review. If timestamps show an edit but no update boundaries are identifiable, the latest full snapshot is retained.
 
-For example, the Solar Crown review's final February 2026 update is provided without its earlier RTX 3070/60 FPS description. Conditions remaining in the selected update are preserved. Original stored reviews and citation IDs are unchanged. The same filtered evidence is used for generation, quote validation, verification, and revision. Available creation/update timestamps accompany the evidence; outputs record `context_policy` and the actual `context_evidence` for inspection. This uses the latest review content available in the retrieved hits.
+For example, the Solar Crown review's final February 2026 update is provided without its earlier RTX 3070/60 FPS description. Conditions remaining in the selected update are preserved. Original stored reviews and citation IDs are unchanged. The selected evidence is used for generation and source-citation validation. Available creation/update timestamps accompany the evidence; outputs record `context_policy` and the actual `context_evidence` for inspection. This uses the latest review content available in the retrieved hits.
 
-To explicitly use full reviews, pass `context_policy="full_review"` or the CLI option `--context-policy full_review`. The fixed 100-question experiment, including the experiment web interface, uses `full_review` to match its existing reference annotations and reproduce the reported results. Evaluating the new policy requires reference summaries and fact labels for the filtered evidence.
+To explicitly use full reviews, pass `context_policy="full_review"` or the CLI option `--context-policy full_review`. The ROUGE experiment first uses `full_review` with `include_review_metadata=True` to construct the reference-matched original context. Compression methods then extract sentences from that context. Latest-update filtering is separate from this study.
 
 ### Helpfulness and Publication Age
 
@@ -69,7 +74,7 @@ The prompt uses these signals to help prioritize relevant supported information.
 
 Generation now aims for one coherent answer: lead with the response to the question, merge overlapping evidence, and connect benefits, limitations and disagreements naturally. The JSON `claims` array contains its sentences in reading order, with citations and quotes preserved. The prompts prohibit adding unsupported history, present popularity, recent improvements or new mod development merely to make the answer sound fluent.
 
-All stages share one UTC reference time, recorded as `context_as_of_utc` together with the formula and selected context. For reproducible inputs, pass `as_of="2026-11-06T12:00:00Z"` to `generate_summary` or `build_context`, or use the CLI option `--as-of`. The fixed `full_review` benchmark retains its original evidence payload and annotations. Current prompts use the synthesis instructions; archived generation results and their recorded prompt hashes remain available for reproduction.
+All stages share one UTC reference time, recorded as `context_as_of_utc` together with the formula and selected context. For reproducible inputs, pass `as_of="2026-11-06T12:00:00Z"` to `generate_summary` or `build_context`, or use the CLI option `--as-of`. The benchmark retains the original evidence and saves the actual compressed context separately. Current prompts use the synthesis instructions; archived generation results and their recorded prompt hashes remain available for reproduction.
 
 ## Connect to the Group Retriever
 
@@ -80,6 +85,8 @@ Run the following integration examples from the group repository's **`code/` dir
 ### Input and Output Contract
 
 Pass the original user question and the final ranked `hits` list from `app.py` directly to the summarizer. Use the same list displayed as the top review results.
+
+The ready-to-use app in [`integration/app.py`](integration/app.py) requires an explicit game selection before searching. Both sparse and dense retrieval receive `filters={"game_name": selected_games}`. Candidate and final-evidence checks exclude other games, and `render_summary(query, hits, games)` checks the scope again before generation. Select multiple games for comparisons. Each app hit needs `metadata.game_name` to pass these checks. The saved answer includes the applied `retrieval_filters`.
 
 | Retriever field | Use in summarization |
 |---|---|
@@ -98,14 +105,14 @@ Review identity uses Steam chunk IDs, or `metadata.review_id` with `appid`/`game
 The return value includes:
 
 - `summary`: the answer with inline `[chunk_id]` citations.
-- `claims`: the retained claim text, supporting `chunk_ids`, and evidence quotes for B/C/D.
+- `claims`: the answer sentences and supporting `chunk_ids`.
 - `citations`: unique cited `chunk_id` values and their available `source_url` values.
 - `status`: `ok`, `abstained`, or `no_evidence`.
-- `usage`, `latency_seconds`, `stage_calls`, and `claim_audit`: generation usage and verification records.
-- `context_policy` and, for live latest-update generation, `context_evidence`: the evidence policy and selected model input.
+- `usage`, `latency_seconds`, `stage_calls`, and `claim_audit`: generation usage and citation-validation records.
+- `context_policy` and `context_evidence`: the evidence policy and selected model input.
 - `context_as_of_utc` and `review_weight_formula`: the reference time and formula for live helpfulness weights.
 
-For live retrieval, omit `fact_candidates`. Original chunk IDs provide citations for any retrieved review. The fixed-benchmark runner supplies its own fact catalog when running the structured evaluation.
+Original chunk IDs remain available for source citations and are removed from the answer text before ROUGE scoring. Generation uses one model call, with optional `few_shot_examples` and `compression_ratio` arguments. The returned `approach` is inferred from those options.
 
 ### API Configuration
 
@@ -121,7 +128,7 @@ Keep the key local. It is read from the environment and is not part of the retri
 
 ### Add Summarization to the Streamlit App
 
-In `code/app.py`, replace the contents of the **"Sentiment analysis / generated answer"** placeholder with the following block. Keep the separate sentiment-analysis module's integration alongside it. The app already defines `query`, `hits`, `json`, and `st`.
+The tested replacement app and patch are provided in [`integration/`](integration/README.md). For a manual integration, require `games` before invoking search and pass the game filter to both retrievers; the existing `search()` accepts the selected games. The block below adds the summary within the **"Sentiment analysis / generated answer"** container. Keep the separate sentiment-analysis module's integration alongside it. The app already defines `query`, `hits`, `games`, `json`, and `st`.
 
 ```python
 import os
@@ -135,7 +142,14 @@ from generation.rag_summary.rag_generator import (
 )
 
 st.markdown("**Evidence-grounded review summary**")
-evidence_key = (query, tuple(
+if not games:
+    st.info("Select at least one target game before generating a summary.")
+    st.stop()
+hits = [h for h in hits if (h.get("metadata") or {}).get("game_name") in games]
+if not hits:
+    st.warning("No reviews match the selected games.")
+    st.stop()
+evidence_key = (query, tuple(sorted(games)), tuple(
     (h["chunk_id"], h["text"], json.dumps(h.get("metadata") or {}, sort_keys=True))
     for h in hits
 ))
@@ -146,13 +160,13 @@ if st.button("Generate summary", key="rag_summary_generate"):
             result = generate_summary(
                 query,
                 hits,
-                approach="improved",
                 model=os.getenv("GENERATION_MODEL", "deepseek-v4-pro"),
                 client=OpenAICompatibleClient(
                     base_url=os.getenv("GENERATION_BASE_URL", "https://api.deepseek.com")
                 ),
                 max_claims=4,
             )
+        result["retrieval_filters"] = {"game_name": list(games)}
         st.session_state["rag_summary_answer"] = (evidence_key, result)
         output_dir = GENERATION_RESULTS_DIR / "rag_summary"
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -184,7 +198,7 @@ Start the existing group interface from `code/`:
 streamlit run app.py
 ```
 
-Search as usual, then click **Generate summary**. The button controls model calls; Streamlit reruns reuse the stored answer for the same question and evidence. Results are saved through `paths.py` to `data/generation_results/rag_summary/latest_answer.json`.
+Select the target game or games, search, then click **Generate summary**. The button controls model calls; Streamlit reruns reuse the stored answer for the same question, game scope and evidence. Results are saved through `paths.py` to `data/generation_results/rag_summary/latest_answer.json`.
 
 ### Use a Downloaded Retrieval Export
 
@@ -194,7 +208,7 @@ Save the export as `data/retrieval_results/search_results.json`. After setting t
 
 ```bash
 python -c "from paths import GENERATION_RESULTS_DIR; (GENERATION_RESULTS_DIR / 'rag_summary').mkdir(parents=True, exist_ok=True)"
-python generation/rag_summary/rag_generator.py ../data/retrieval_results/search_results.json --approach improved --max-claims 4 --output ../data/generation_results/rag_summary/answer.json
+python generation/rag_summary/rag_generator.py ../data/retrieval_results/search_results.json --max-claims 4 --output ../data/generation_results/rag_summary/answer.json
 ```
 
 For programmatic loading, use:
@@ -233,60 +247,71 @@ hits = Reranker().rerank(query, fused, top_k=5)
 
 ### Live Answers and Benchmark Evaluation
 
-The integration above generates answers from the current retrieval results. The experiment web interface launched by `launch_web.py` runs the fixed 100-question benchmark with its saved evidence and reference sets. Its upload option accepts unchanged benchmark subsets. New questions or different retrieved passages require corresponding references before fact-selection metrics can be computed.
+The integration above generates answers from the current retrieval results. The experiment web interface launched by `launch_web.py` uses a frozen 20/80 development/test split of the fixed 100-question benchmark. Its upload option accepts unchanged subsets belonging to the selected partition, excluding the two demonstration questions. New questions or different retrieved passages require matching references before ROUGE comparison.
 
-The module's bundled benchmark data and final experiment results remain inside `rag_summary/` for reproduction. Live group-app outputs use the shared `GENERATION_RESULTS_DIR` path shown above.
+The module's bundled benchmark data and archived experiment results remain inside `rag_summary/` for reference. Live group-app outputs use the shared `GENERATION_RESULTS_DIR` path shown above.
 
-## Command-line Experiments
+## Command-line ROUGE Experiments
 
-Set `GENERATION_API_KEY` in your own terminal, then run:
-
-```bash
-python run_fact_experiments.py --output experiments/runs/full --limit 100 --repeats 1 --max-claims 4 --base-url https://api.deepseek.com --model deepseek-v4-pro
-```
-
-For a trial run, replace `--limit 100` with `--limit 3`. Use a new, empty output directory.
-
-Outputs include complete generation results, per-task checkpoints, predicted IDs, the reference sets used, CSV metrics, summaries, and configuration hashes.
-
-## Recompute Scores Without API Calls
-
-Rescore a downloaded experiment ZIP:
+Set `GENERATION_API_KEY` or `OPENAI_API_KEY` in your own terminal, then run:
 
 ```bash
-python recompute_results.py generation-experiment.zip --output experiments/runs/rescored
+python run_generation_experiments.py --output experiments/runs/fewshot_compression_test --split test --limit 80 --compression-ratio 0.6 --repeats 1 --max-claims 4 --base-url https://api.deepseek.com --model deepseek-v4-pro
 ```
 
-Reproduce the report results without an API key:
+For a trial run, use `--limit 3`. For development, use `--split development --limit 18`. Use a new, empty output directory. API keys are read from the local environment and excluded from outputs.
+
+The allowed experiment methods are `baseline`, `few_shot`, `compressed`, and `combined`. Self-check methods are not accepted by the current runner or web API.
+
+Outputs include:
+
+- `generation_results.json` and `checkpoint.jsonl`: each answer, source citations, its reference answer, all nine ROUGE precision/recall/F1 scores, and execution metrics.
+- `summary.csv`: macro means and valid counts for ROUGE-1/2/L, latency, model calls, tokens and optional cost estimates.
+- `report.md` and `report_data.json`: summary tables, five paired method comparisons with query-bootstrap confidence intervals, and the factorial interaction (combined − few-shot − compression + baseline). ROUGE, input tokens, latency and optional costs receive paired comparisons.
+- `evaluation_references.jsonl` and `input.jsonl`: the current scoring references and original cases.
+- `split.json` and `few_shot_examples.json`: the frozen split and exact demonstrations. Each result also records actual evidence; compressed results retain full original evidence and extract character spans.
+- `manifest.json`: the protocol, split, method settings, compression ratio, scoring options, metadata reference time, and data/prompt/code hashes.
+
+The web interface runs this same workflow and includes these files in its results ZIP.
+
+## ROUGE Scoring
+
+The scorer uses the 100 English answers in `data/reference_summaries/reviewed/approved_references.jsonl`. Each must be marked human-reviewed and match the question and evidence revision.
+
+| Metric | Comparison |
+|---|---|
+| ROUGE-1 | Overlap of word-token counts |
+| ROUGE-2 | Overlap of consecutive token-pair counts |
+| ROUGE-L | Longest common subsequence of the complete answer and reference |
+
+Source-ID citation markers are removed before scoring. Tokenization lowercases text and keeps ASCII English letter/digit tokens, without stemming. This matches the default tokenizer of Google's `rouge-score` with `use_stemmer=False`. ROUGE-L is whole-answer LCS, not ROUGE-Lsum. The dependency-free implementation has been cross-checked against `rouge-score==0.1.2` on 506 text pairs, covering all nine scores.
+
+Scores in JSON and CSV are between 0 and 1. The web page and Markdown report show F1 as percentages. Aggregation takes the mean of completed-answer scores; failed requests are recorded separately. Each completed answer, including an abstention, is scored from its actual text. Repetitions remain grouped by question in bootstrap comparisons.
+
+The original benchmark evidence and scoring references remain fixed. Compression selects sentences from that original context, without changing the reference target. Few-shot methods use only the two development demonstrations. No current-question reference answer, fact candidate or sentiment label is sent to generation. Uploaded cases must preserve their original question, passages, order and metadata and belong to the selected split.
+
+## Recompute ROUGE Without API Calls
+
+Score a downloaded experiment ZIP, results directory, or saved result JSON:
 
 ```bash
-python recompute_results.py experiments/final/generation_results.json --output experiments/runs/report_reproduction
+python evaluate_generation.py generation-experiment.zip --output experiments/runs/rouge_rescored
 ```
 
-Score a prediction JSONL file directly:
+Current full and compressed results can be rescored without regeneration. The scorer validates the experiment protocol, actual evidence, compression spans and frozen demonstration IDs. Original result files are never overwritten.
 
-```bash
-python evaluate_fact_selection.py experiments/final/predictions.jsonl --output experiments/runs/prediction_metrics.json
-```
+## Data and Historical Fact-ID Evaluation
 
-Each prediction line contains `id` and `selected_fact_ids`, with optional `approach`, `repeat`, and `summary` fields. The scripts use the final reference sets included in this repository.
+- `data/reference_summaries/reviewed/approved_references.jsonl`: 100 approved English reference answers for current ROUGE scoring.
+- `experiments/steam_generation_eval.jsonl`: 100 fixed questions, each with ten saved annotated review passages from `hybrid_rerank` rankings.
+- `data/generation_annotations/`: the original 1,000 annotated passages, 2,898 review–aspect facts and historical fact-selection targets.
+- `data/generation_annotations/human_review.json`: 40 query-specific decisions used in the earlier fact-selection study.
 
-## Data and Scoring
+Historical Precision/Recall/F1, coverage-unit recall and polarity-contrast scores remain in the saved report artifacts. The old runner, scorer, compatibility commands and self-check prompts have been removed. Their source is available in Git history at commit `7f4537d`.
 
-- `data/reference_summaries/reviewed/approved_references.jsonl`: 100 human-reviewed English summary references, including two translated Chinese edits. These answer-level references are ready for ROUGE evaluation and are separate from the fact-ID labels below.
-- `experiments/steam_generation_eval.jsonl`: 100 fixed questions, each with up to ten annotated review passages from saved `hybrid_rerank` rankings.
-- `data/generation_annotations/`: 1,000 annotated source passages, 2,898 review–aspect facts, and the final reference sets.
-- `data/generation_annotations/human_review.json`: 40 user-adjudicated decisions across 16 questions, comprising 22 core facts, seven optional background facts, and 11 excluded facts.
+## Archived Fact-selection Results
 
-Core facts belong to the required reference set. Optional background facts are neither required for coverage nor penalized as incorrect selections. Excluded facts count as incorrect when selected. Items outside this review retain the original annotation-matching rules.
-
-Metrics include fact-selection Precision/Recall/F1, coverage-unit recall, polarity-contrast coverage, execution time, model calls, and token usage. Coverage units group facts by game, aspect, and sentiment. The final references contain 591 required query–fact pairs, 238 coverage units, and 27 positive/negative contrast groups across 24 questions. Condition retention is not scored because the corresponding human annotations are unavailable.
-
-These metrics evaluate structured fact selection. See the [data documentation](data/generation_annotations/README.md) for sources, fields, and scoring rules. The web interface accepts subsets of the original benchmark with unchanged questions and evidence.
-
-## Final Experiment Results
-
-`experiments/final/` contains the actual generation outputs and revised scores used in the report. Scores below are percentages macro-averaged across applicable questions:
+`experiments/final/` preserves the earlier generation outputs and fact-selection scores used in the report. The values below are historical fact-ID scores, not ROUGE:
 
 | Method | Precision | Recall | F1 | Unit recall | Contrast coverage |
 |---|---:|---:|---:|---:|---:|
@@ -300,18 +325,21 @@ A/B each completed 100 tasks; C/D each completed 99. See the saved outputs and [
 ## Repository Structure
 
 ```text
-rag_generator.py            Generation, citation validation, self-checking, and revision
+rag_generator.py            Single-call generation, citations, optional examples/compression
 review_context.py           Latest review updates and helpfulness/age signals
-prompts/                    A/B, fact-selection, verification, and revision prompts
-run_fact_experiments.py      Fixed-benchmark experiment runner
+prompts/                    Baseline and few-shot instructions
+context_compression.py      Local TF-IDF sentence selection and traceable spans
+generation_experiment_design.py Frozen split, demonstrations and method settings
+run_generation_experiments.py Few-shot × compression ROUGE experiment runner
+evaluate_generation.py      Deterministic ROUGE scorer and offline result evaluation
 experiment_web.py            Web backend, progress tracking, and ZIP export
 launch_web.py                Local launch entry point
 web/                        Web frontend
-evaluate_fact_selection.py  Shared deterministic scorer
-recompute_results.py        Offline rescoring of saved outputs
-data/generation_annotations/ Final data and human review records
+data/reference_summaries/   Drafts and finalized human-reviewed English answers
+data/generation_experiment/ Fixed 20/80 split and two development demonstrations
+data/generation_annotations/ Original annotations and historical scoring references
 experiments/                Fixed inputs, source audit, and final results
-tests/                      Generation, scoring, web, and reproduction tests
+tests/                      Generation, scoring, web, and data-integrity tests
 ```
 
 ## Validation
@@ -320,4 +348,17 @@ tests/                      Generation, scoring, web, and reproduction tests
 python -m unittest discover -s tests -v
 ```
 
-Tests use scripted models and saved final outputs; they do not call paid APIs.
+Tests use scripted models and saved outputs; they do not call paid APIs. Optional frontend checks:
+
+```bash
+node tests/experiment_web_ui.cjs
+node tests/reference_review_ui.cjs
+```
+
+An optional real-browser smoke test uses Playwright and an available Chromium binary (`CHROMIUM_PATH` can override the binary). It runs a temporary localhost server and a scripted model:
+
+```bash
+python tests/browser_experiment.py
+```
+
+`tests/validate_rouge_against_reference.py` reproduces the optional cross-check when `rouge-score==0.1.2` is installed in a separate test environment. This package is not needed to run generation or scoring.

@@ -35,15 +35,18 @@ HITS = [
 
 class SparseFixture:
     method = 'sparse'
+    calls = []
+    ignore_filter = False
 
     def __init__(self, *args, **kwargs):
         self.chunks = copy.deepcopy(HITS)
 
     def retrieve(self, query, top_k=20, filters=None):
+        self.calls.append({'method': self.method, 'filters': copy.deepcopy(filters)})
         if 'no-matching-reviews' in query:
             return []
         selected = self.chunks
-        if filters:
+        if filters and not self.ignore_filter:
             selected = [h for h in selected if h['metadata']['game_name'] in filters['game_name']]
         return [dict(copy.deepcopy(h), score=float(len(selected)-i), retrieval_method=self.method)
                 for i, h in enumerate(selected[:top_k])]
@@ -128,10 +131,14 @@ class AppGenerationTests(unittest.TestCase):
         data.start(); self.addCleanup(data.stop)
         st.cache_data.clear()
         st.cache_resource.clear()
+        SparseFixture.calls.clear()
 
-    def app(self, query='How is the soundtrack?'):
+    def app(self, query='How is the soundtrack?', games=('Example Game',)):
         app = AppTest.from_file(str(CODE / 'app.py'), default_timeout=20).run()
         self.assertFalse(app.exception)
+        if games:
+            app.sidebar.multiselect(key='games').set_value(list(games)).run()
+            self.assertFalse(app.exception)
         if query:
             app.text_input(key='query').set_value(query).run()
             self.assertFalse(app.exception)
@@ -154,6 +161,7 @@ class AppGenerationTests(unittest.TestCase):
         result = json.loads((self.output / 'rag_summary/latest_answer.json').read_text())
         self.assertEqual(result['model'], 'fixture-model')
         self.assertEqual(result['status'], 'ok')
+        self.assertEqual(result['retrieval_filters'], {'game_name': ['Example Game']})
         self.assertEqual(result['citations'][0]['chunk_id'], 'fixture:review:1')
         self.assertEqual(result['citations'][0]['source_url'], HITS[0]['metadata']['source_url'])
         self.assertNotIn('local-fixture-key', json.dumps(result))
@@ -226,7 +234,11 @@ class AppGenerationTests(unittest.TestCase):
                 app.sidebar.radio[0].set_value(mode).run()
                 self.generate(app)
                 self.assertTrue(self.answer_visible(app))
+                evidence = json.loads(self.api.requests[-1]['messages'][1]['content'])['evidence']
+                self.assertTrue(all(h['game_name'] == 'Example Game' for h in evidence))
         self.assertEqual(len(self.api.requests), 4)
+        self.assertTrue(SparseFixture.calls)
+        self.assertTrue(all(c['filters'] == {'game_name': ['Example Game']} for c in SparseFixture.calls))
 
     def test_game_filter_is_preserved(self):
         app = self.app()
@@ -234,6 +246,77 @@ class AppGenerationTests(unittest.TestCase):
         self.generate(app)
         payload = json.loads(self.api.requests[0]['messages'][1]['content'])
         self.assertEqual([h['game_name'] for h in payload['evidence']], ['Another Game'])
+
+    def test_game_selection_is_required_before_retrieval_or_generation(self):
+        app = self.app(games=())
+        self.assertTrue(any('Select at least one target game' in e.value for e in app.info))
+        self.assertFalse(any(b.key == 'rag_summary_generate' for b in app.button))
+        self.assertEqual(SparseFixture.calls, [])
+        self.assertEqual(self.api.requests, [])
+
+    def test_clearing_games_removes_the_answer_and_blocks_further_calls(self):
+        app = self.generate(self.app())
+        calls = len(SparseFixture.calls)
+        app.sidebar.multiselect(key='games').set_value([]).run()
+        self.assertFalse(app.exception)
+        self.assertFalse(self.answer_visible(app))
+        self.assertFalse(any(b.key == 'rag_summary_generate' for b in app.button))
+        self.assertEqual(len(SparseFixture.calls), calls)
+        self.assertEqual(len(self.api.requests), 1)
+
+    def test_foreign_candidates_are_removed_even_when_a_retriever_ignores_the_filter(self):
+        with patch.object(SparseFixture, 'ignore_filter', True):
+            app = self.app()
+            for mode in ['Hybrid + Rerank', 'Hybrid (RRF)', 'BM25', 'Dense']:
+                app.sidebar.radio[0].set_value(mode).run()
+                self.generate(app)
+                evidence = json.loads(self.api.requests[-1]['messages'][1]['content'])['evidence']
+                self.assertEqual(len(evidence), 2)
+                self.assertEqual({h['game_name'] for h in evidence}, {'Example Game'})
+
+    def test_multiple_explicit_games_are_supported_for_comparison(self):
+        app = self.generate(self.app(games=('Example Game', 'Another Game')))
+        evidence = json.loads(self.api.requests[0]['messages'][1]['content'])['evidence']
+        self.assertEqual({h['game_name'] for h in evidence}, {'Example Game', 'Another Game'})
+        self.assertTrue(self.answer_visible(app))
+
+    def test_changed_game_scope_hides_answer_even_when_top_hit_stays_the_same(self):
+        app = self.app()
+        app.sidebar.slider[0].set_value(1).run()
+        self.generate(app)
+        before = json.loads(self.api.requests[0]['messages'][1]['content'])['evidence']
+        app.sidebar.multiselect(key='games').set_value(['Example Game', 'Another Game']).run()
+        self.assertFalse(self.answer_visible(app))
+        self.generate(app)
+        after = json.loads(self.api.requests[1]['messages'][1]['content'])['evidence']
+        self.assertEqual(before, after)
+
+    def summary_app(self, hits, games):
+        source = 'from app import render_summary\n'
+        source += f'render_summary("How is the game?", {hits!r}, {games!r})\n'
+        app = AppTest.from_string(source, default_timeout=20).run()
+        self.assertFalse(app.exception)
+        return app
+
+    def test_summary_entry_point_requires_games_even_if_called_directly(self):
+        app = self.summary_app(HITS, [])
+        self.assertTrue(app.info)
+        self.assertFalse(any(b.key == 'rag_summary_generate' for b in app.button))
+        self.assertEqual(self.api.requests, [])
+
+    def test_summary_entry_point_excludes_foreign_and_unknown_game_metadata(self):
+        hits = [copy.deepcopy(HITS[2]), {'chunk_id': 'missing-game', 'text': 'Unknown source.'},
+                copy.deepcopy(HITS[0])]
+        app = self.generate(self.summary_app(hits, ['Example Game']))
+        evidence = json.loads(self.api.requests[0]['messages'][1]['content'])['evidence']
+        self.assertEqual([h['chunk_id'] for h in evidence], ['fixture:review:1'])
+        self.assertTrue(self.answer_visible(app))
+
+    def test_summary_entry_point_with_only_foreign_reviews_does_not_call_the_api(self):
+        app = self.summary_app([HITS[2]], ['Example Game'])
+        self.assertTrue(app.warning)
+        self.assertFalse(any(b.key == 'rag_summary_generate' for b in app.button))
+        self.assertEqual(self.api.requests, [])
 
     def test_no_matching_reviews_do_not_call_model(self):
         app = self.app('no-matching-reviews')
@@ -246,7 +329,7 @@ class AppGenerationTests(unittest.TestCase):
         app = self.generate(self.app())
         self.assertTrue(app.error)
         self.assertEqual(len(self.api.requests), 0)
-        self.assertTrue(any('Top 3 reviews' in item.value for item in app.subheader))
+        self.assertTrue(any('Top 2 reviews' in item.value for item in app.subheader))
 
     def test_api_errors_do_not_leak_provider_details_or_show_stale_answers(self):
         app = self.generate(self.app())

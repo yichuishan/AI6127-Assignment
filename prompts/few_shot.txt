@@ -1,0 +1,8 @@
+
+Worked examples are supplied in the examples field. Each contains its own question,
+source evidence and a response illustrating the required claims JSON schema.
+Learn how the examples merge overlapping evidence, retain limitations and
+disagreement, and answer directly in a coherent paragraph. Example sources and
+answers are demonstrations only: never use their facts or IDs to answer the
+current question. Cite only IDs in the current evidence field. Return the same
+claims JSON format as the baseline instructions; do not reproduce an example.

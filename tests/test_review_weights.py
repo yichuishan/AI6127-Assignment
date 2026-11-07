@@ -6,7 +6,7 @@ import unittest
 
 from rag_generator import build_context, generate_summary
 from review_context import context_time, high_helpfulness_threshold
-from test_verification import ScriptedClient, verdict
+from helpers import ScriptedClient
 
 
 AS_OF = '2026-11-06T12:00:00Z'
@@ -78,15 +78,14 @@ class ReviewWeightTests(unittest.TestCase):
         self.assertEqual([e['helpful_votes'] for e in context], [100, 100])
         self.assertTrue(all(e['chunk_id'].startswith('steam:1:1:') for e in context))
 
-    def test_generation_verification_and_revision_receive_identical_signals_and_clock(self):
+    def test_single_generation_receives_signals_and_clock(self):
         source = review(120)
         claim = {'text': 'A highly upvoted review praises smooth performance on Windows.',
-                 'chunk_ids': [source['chunk_id']],
-                 'evidence': [{'chunk_id': source['chunk_id'], 'quote': 'It runs smoothly on Windows.'}]}
-        client = ScriptedClient({'claims': [claim]}, verdict('partially_supported'),
-                                {'claim': claim}, verdict('supported'))
+                 'chunk_ids': [source['chunk_id']]}
+        client = ScriptedClient({'claims': [claim]})
         result = generate_summary('How does it run?', [source], client=client, as_of=AS_OF)
         self.assertEqual(result['status'], 'ok')
+        self.assertEqual(len(client.calls),1)
         self.assertIn('highly upvoted', result['summary'])
         self.assertNotIn('120', result['summary'])
         self.assertTrue(result['context_evidence'][0]['is_high_helpfulness'])
@@ -123,7 +122,7 @@ class ReviewWeightTests(unittest.TestCase):
 
     def test_full_review_benchmark_contract_excludes_live_vote_fields(self):
         client = ScriptedClient({'claims': []})
-        result = generate_summary('How does it run?', [review()], approach='baseline', client=client,
+        result = generate_summary('How does it run?', [review()], client=client,
                                   context_policy='full_review')
         payload = json.loads(client.calls[0][1]['content'])
         self.assertEqual(set(payload['evidence'][0]), {'chunk_id', 'text', 'game_name', 'source_url'})

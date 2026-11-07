@@ -9,11 +9,11 @@ import unittest
 
 from rag_generator import build_context, generate_summary
 from review_context import timestamp
-from run_fact_experiments import BENCHMARK, benchmark, jsonl, run
-from recompute_results import load_results, rescore
-from evaluate_fact_selection import ANNOTATIONS, read_jsonl
-from test_verification import ScriptedClient, verdict
-from test_fact_experiments import FactModel
+from run_generation_experiments import BENCHMARK, benchmark, jsonl, run
+from generation_experiment_design import select_cases
+from evaluate_generation import rescore
+from helpers import ScriptedClient
+from test_rouge_generation import SummaryModel
 
 
 def hit(text, cid='steam:1:1:chunk:001', **metadata):
@@ -134,52 +134,42 @@ class ReviewContextTests(unittest.TestCase):
         self.assertEqual(build_context([hit(text)], max_chunk_chars=30)[0]['text'],
                          'Update: Current experience.')
 
-    def test_removed_quotes_rejected_and_all_self_check_stages_use_filtered_text(self):
-        cid = 'steam:1:1:chunk:001'
-        source = hit('Old: 20 FPS.\nUpdate: Now stable on Windows.')
-        good = {'text': 'One reviewer reports stability on Windows.', 'chunk_ids': [cid],
-                'evidence': [{'chunk_id': cid, 'quote': 'Now stable on Windows.'}]}
-        bad = dict(good, evidence=[{'chunk_id': cid, 'quote': '20 FPS'}])
-        client = ScriptedClient({'claims': [bad]})
-        result = generate_summary('Performance?', [source], client=client)
-        self.assertEqual(result['status'], 'abstained')
-        self.assertEqual(len(client.calls), 1)
-        client = ScriptedClient({'claims': [good]}, verdict('partially_supported'),
-                                {'claim': good}, verdict('supported'))
-        result = generate_summary('Performance?', [source], client=client)
-        self.assertEqual(result['status'], 'ok')
-        self.assertEqual(result['context_policy'], 'latest_update')
-        for messages in client.calls:
-            self.assertNotIn('20 FPS', messages[1]['content'])
-            self.assertIn('TEMPORAL EVIDENCE RULE', messages[0]['content'])
-            self.assertEqual(json.loads(messages[1]['content'])['evidence'], result['context_evidence'])
+    def test_single_generation_uses_only_filtered_text(self):
+        cid='steam:1:1:chunk:001'
+        source=hit('Old: 20 FPS.\nUpdate: Now stable on Windows.')
+        claim={'text':'One reviewer reports stability on Windows.','chunk_ids':[cid]}
+        client=ScriptedClient({'claims':[claim]})
+        result=generate_summary('Performance?',[source],client=client)
+        self.assertEqual(result['status'],'ok')
+        self.assertEqual(len(client.calls),1)
+        self.assertEqual(result['context_policy'],'latest_update')
+        messages=client.calls[0]
+        self.assertNotIn('20 FPS',messages[1]['content'])
+        self.assertIn('TEMPORAL EVIDENCE RULE',messages[0]['content'])
+        self.assertEqual(json.loads(messages[1]['content'])['evidence'],result['context_evidence'])
 
-    def test_full_review_policy_reproduces_old_context_contract(self):
+    def test_full_review_policy_preserves_fixed_context_contract(self):
         source = self.reviews['steam:1249970:208994799:chunk:001']
         context = build_context([source], context_policy='full_review')
         self.assertEqual(context, [{'chunk_id': source['chunk_id'], 'text': source['text'],
                                    'game_name': source['metadata']['game_name'],
                                    'source_url': source['metadata']['source_url']}])
         client = ScriptedClient({'claims': []})
-        result = generate_summary('Performance?', [source], approach='baseline', client=client,
+        result = generate_summary('Performance?', [source], client=client,
                                   context_policy='full_review')
         self.assertNotIn('TEMPORAL EVIDENCE RULE', client.calls[0][0]['content'])
-        self.assertNotIn('context_evidence', result)
+        self.assertEqual(result['context_evidence'],context)
 
-    def test_benchmark_remains_explicitly_full_review_and_filtered_outputs_cannot_be_rescored(self):
-        case = next(c for c in self.cases if any('208994799' in h['chunk_id'] for h in c['results']))
+    def test_benchmark_uses_full_reviews_and_rejects_latest_update_rescoring(self):
+        case=next(c for c in select_cases(self.cases) if any('208994799' in h['chunk_id'] for h in c['results']))
         benchmark([case])
         with tempfile.TemporaryDirectory() as tmp:
-            model = FactModel()
-            rows = run([case], Path(tmp) / 'run', client=model, model='scripted', approaches=['baseline'])
-            self.assertEqual(rows[0]['result']['context_policy'], 'full_review')
-            self.assertIn('60 FPS', model.calls[0][1]['content'])
-            self.assertEqual(json.loads((Path(tmp) / 'run/manifest.json').read_text())['context_policy'], 'full_review')
-        row = next(r for r in load_results(BENCHMARK.parent / 'final/generation_results.json')
-                   if r['status'] == 'completed')
-        row['result']['context_policy'] = 'latest_update'
-        with self.assertRaisesRegex(ValueError, 'filtered context'):
-            rescore([row], read_jsonl(ANNOTATIONS / 'query_annotations.jsonl'))
+            model=SummaryModel()
+            rows=run([case],Path(tmp)/'run',client=model,model='scripted',approaches=['baseline'])
+            self.assertEqual(rows[0]['result']['context_policy'],'full_review')
+            self.assertIn('60 FPS',model.calls[0][1]['content'])
+            rows[0]['result']['context_policy']='latest_update'
+            with self.assertRaises(ValueError):rescore(rows)
 
     def test_group_namespace_import_can_find_temporal_helper(self):
         root = Path(__file__).resolve().parents[1]

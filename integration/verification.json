@@ -1,12 +1,14 @@
 {
-  "group_base_commit": "8578fec14efcad31dfa8e4a0c8b68939c3b66b80",
+  "group_base_commit": "ab5844eca94b7c0579c07c428f77fffecb92f5c8",
   "target_file": "code/app.py",
-  "app_sha256": "445406c630a163eeb14d6f5fb8fbed59b3e957dc9e988679cef472f33b81a41c",
+  "app_sha256": "98eab9bf25497e35db083e7d7b1f9fd0154d855d42628f5bedd63d4701a990c0",
   "streamlit_version": "1.66.1",
-  "tests_passed": 15,
+  "tests_passed": 23,
   "uses_paid_model_api": false,
   "verification": "Real Streamlit AppTest and local Chat Completions HTTP API; fixture scoring/model weights, actual expansion/fusion/reranking control flow and generator.",
-  "production_changes": "One new render_summary helper and its imports/call; existing retrieval helpers unchanged.",
+  "production_changes": "Required explicit game scope; filtered sparse/dense candidates and ranked output; generation-boundary filtering; scope-aware answer cache and exported retrieval_filters.",
   "temporal_evidence": "Latest available review snapshot/update is provided to the model; update timestamps invalidate stale answers.",
-  "helpfulness_evidence": "Recorded helpful vote counts and publication-age weights reach the model and saved output, using one shared as_of UTC timestamp."
+  "helpfulness_evidence": "Recorded helpful vote counts and publication-age weights reach the model and saved output, using one shared as_of UTC timestamp.",
+  "game_scope": "No search or generation without selected games. Only selected games reach the generator, including when retrieval fixtures ignore their filters.",
+  "generation_protocol": "Single-call cited generation; optional few-shot and compression; legacy self-check/fact-ID paths removed."
 }
