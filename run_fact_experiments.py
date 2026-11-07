@@ -15,6 +15,8 @@ from rag_generator import APPROACHES, PROMPTS, OpenAICompatibleClient, build_con
 ROOT=Path(__file__).resolve().parent
 BENCHMARK=ROOT/'experiments/steam_generation_eval.jsonl'
 ASPECTS=('story','graphics_visuals','gameplay','controls','performance','audio','bugs_stability','online_multiplayer')
+# These references and archived report scores were built from full review texts.
+BENCHMARK_CONTEXT_POLICY='full_review'
 
 
 def jsonl(path):
@@ -36,7 +38,7 @@ def benchmark(cases):
         signature=lambda x:(x['query'],[(h['chunk_id'],h['text'],(h.get('metadata') or {}).get('game_name')) for h in x['results']])
         if expected is None or signature(c)!=signature(expected):
             raise ValueError('Uploaded case does not match the fixed annotated benchmark')
-        context=build_context(c['results'])
+        context=build_context(c['results'],context_policy=BENCHMARK_CONTEXT_POLICY)
         if [x['chunk_id'] for x in context]!=references[c['id']]['context_chunk_ids']:
             raise ValueError('Constructed context does not match the reference context')
     return references,samples
@@ -121,13 +123,13 @@ def run(cases,out,*,client,model,approaches=APPROACHES,repeats=1,max_claims=4,se
     if out.exists() and any(out.iterdir()):raise ValueError('Use a new output directory')
     out.mkdir(parents=True,exist_ok=True)
     manifest=dict(config or {},evaluation_method='exact_fact_id_matching_human_review_v1',
-        reference_version=REFERENCE_VERSION,model=model,
+        reference_version=REFERENCE_VERSION,model=model,context_policy=BENCHMARK_CONTEXT_POLICY,
         approaches=list(approaches),repeats=repeats,max_claims=max_claims,seed=seed,
         candidate_catalog='all_eight_aspects_for_each_visible_review',reference_labels_in_prompt=False,
         context_limits={'max_context_chars':24000,'max_chunk_chars':4000},
         prompt_hashes={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in PROMPTS.glob('*.txt')},
         data_hash=hashlib.sha256(json.dumps(cases,sort_keys=True,ensure_ascii=False).encode()).hexdigest(),
-        code_hashes={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in ('rag_generator.py','run_fact_experiments.py','evaluate_fact_selection.py')},
+        code_hashes={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in ('rag_generator.py','review_context.py','run_fact_experiments.py','evaluate_fact_selection.py')},
         passage_mapping_hash=hashlib.sha256((ANNOTATIONS/'passages.jsonl').read_bytes()).hexdigest(),
         annotation_hash=hashlib.sha256((ANNOTATIONS/'query_annotations.jsonl').read_bytes()).hexdigest(),
         human_review_hash=hashlib.sha256((ANNOTATIONS/'human_review.json').read_bytes()).hexdigest())
@@ -140,10 +142,11 @@ def run(cases,out,*,client,model,approaches=APPROACHES,repeats=1,max_claims=4,se
         if stop_requested and stop_requested():break
         row={'case_id':case['id'],'repeat':repeat,'approach':arm,'status':'completed','metrics':{}}
         try:
-            context=build_context(case['results']);candidates=catalog(context,samples)
+            context=build_context(case['results'],context_policy=BENCHMARK_CONTEXT_POLICY);candidates=catalog(context,samples)
             transport=SharedDraft(client,cache,(case['id'],repeat))
             result=generate_summary(case['query'],case['results'],approach=arm,model=model,client=transport,
-                max_claims=max_claims,fact_candidates=candidates,input_cost_per_million=input_price,output_cost_per_million=output_price)
+                max_claims=max_claims,fact_candidates=candidates,input_cost_per_million=input_price,
+                output_cost_per_million=output_price,context_policy=BENCHMARK_CONTEXT_POLICY)
             row['measured_execution_seconds']=result['latency_seconds']
             if transport.replayed:
                 first=result['stage_calls'][0]

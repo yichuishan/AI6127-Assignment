@@ -1,0 +1,33 @@
+[
+  {
+    "id": "hybrid_rerank/q03",
+    "submitted_chinese": "虽然有一位评论者表示，即使使用最低画质设置，自己的 PC 也无法运行 Cyberpunk 2077。但是近期的大部分评论显示游戏能够稳定流畅的运行。",
+    "final_chinese": "PC 运行体验存在差异：有评论反映最低画质下仍有严重输入延迟，也有从 Xbox One 转到 PC 后未再遇到序章结尾崩溃的体验。",
+    "final_english": "PC experiences differ: severe input latency is reported even at the lowest graphics settings, while an account of moving from Xbox One to PC describes no repeat of the crash at the end of the prologue.",
+    "reason": "User explicitly accepted the proposed evidence-grounded wording in chat; it replaces the unsupported claim that most recent reviews show stable, smooth performance.",
+    "reviewer": "1",
+    "source_reviewed_at": "2026-11-07T05:47:02.097Z",
+    "supporting_chunk_ids": [
+      "steam:1091500:237091103:chunk:001",
+      "steam:1091500:237099475:chunk:001"
+    ],
+    "translated_by": "assistant",
+    "prepared_at_utc": "2026-11-07T07:07:24.393599+00:00"
+  },
+  {
+    "id": "hybrid_rerank/q04",
+    "submitted_chinese": "一位评论者在配置较低的 PC 上达到 50–60 FPS，但在平原区域仍会掉帧；另一位使用平衡模式 DLSS、不启用帧生成时约为 50 FPS，也有评论者表示笔记本运行流畅。因此体验取决于实际的电脑配置。",
+    "final_chinese": "一位评论者在配置较低的 PC 上达到 50–60 FPS，但在平原区域仍会掉帧；另一位使用平衡模式 DLSS、不启用帧生成时约为 50 FPS，也有评论者表示笔记本运行流畅。因此体验取决于实际的电脑配置。",
+    "final_english": "Reported performance depends on the PC setup: examples include 50–60 FPS on a low-end PC with drops in the Plains, around 50 FPS with balanced DLSS and no frame generation, and smooth laptop play.",
+    "reason": "English translation of the user-reviewed Chinese edit; preserves the selected frame-rate and laptop examples without restoring information the reviewer removed.",
+    "reviewer": "1",
+    "source_reviewed_at": "2026-11-07T05:47:09.633Z",
+    "supporting_chunk_ids": [
+      "steam:2246340:237302690:chunk:001",
+      "steam:2246340:236769736:chunk:001",
+      "steam:2246340:236388593:chunk:001"
+    ],
+    "translated_by": "assistant",
+    "prepared_at_utc": "2026-11-07T07:07:24.393599+00:00"
+  }
+]

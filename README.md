@@ -4,6 +4,8 @@ Final experiment code for comparing four RAG summarization methods with fixed re
 
 Requires **Python 3.10+**. The project uses only the Python standard library; no evaluator model or third-party Python packages are required.
 
+Unless stated otherwise, run commands from the directory containing this README. In the group repository, that directory is `code/generation/rag_summary/`. The integration examples below explicitly run from `code/`.
+
 ## Run the Web Interface
 
 ```bash
@@ -43,6 +45,198 @@ result = generate_summary(
 
 Each entry in `ranked_passages` requires `chunk_id` and `text`, with optional `game_name` and `source_url` fields inside `metadata`. For structured experiments, the runner adds eight aspect candidates per review without presence or sentiment labels. Reference answers and human sentiment labels are excluded from model inputs.
 
+### Latest Review Updates
+
+Live generation defaults to `context_policy="latest_update"`. Before context truncation, it selects the newest available snapshot of each review using `metadata.updated_at_utc` (or `timestamp_updated`), falling back to the creation timestamp. Different reviewers remain separate evidence sources.
+
+When a review contains explicit substantive `Edit:` or `Update:` blocks, only its latest visible update and continuation are provided to the model. Dated blocks use their dates when all updates are dated; otherwise their order determines the latest update. Repeated and numbered headings such as `Edit Edit:` and `(Edit 2:` are supported. Typo/phrasing-only notes do not replace the substantive review. If timestamps show an edit but no update boundaries are identifiable, the latest full snapshot is retained.
+
+For example, the Solar Crown review's final February 2026 update is provided without its earlier RTX 3070/60 FPS description. Conditions remaining in the selected update are preserved. Original stored reviews and citation IDs are unchanged. The same filtered evidence is used for generation, quote validation, verification, and revision. Available creation/update timestamps accompany the evidence; outputs record `context_policy` and the actual `context_evidence` for inspection. This uses the latest review content available in the retrieved hits.
+
+To explicitly use full reviews, pass `context_policy="full_review"` or the CLI option `--context-policy full_review`. The fixed 100-question experiment, including the experiment web interface, uses `full_review` to match its existing reference annotations and reproduce the reported results. Evaluating the new policy requires reference summaries and fact labels for the filtered evidence.
+
+### Helpfulness and Publication Age
+
+Live latest-update generation also provides `helpful_votes`, `review_age_days`, and `helpful_votes_per_day` when the source fields are available. The weight is:
+
+```text
+helpful_votes_per_day = helpful_votes / max(days_since_first_publication, 1)
+```
+
+The one-day floor covers newly published reviews. The denominator uses the creation timestamp, even for edited reviews, because votes belong to the whole review. Missing/invalid counts or missing/future publication timestamps do not produce a weight. Raw Steam `votes_up` and `timestamp_created` are accepted alongside the normalized fields. Review text, citation IDs, and retrieval order are preserved.
+
+The prompt uses these signals to help prioritize relevant supported information. `is_high_helpfulness` identifies reviews with at least ten helpful votes and at or above the nearest-rank upper quartile of distinct reviews in the visible context. Only these reviews may be called “highly upvoted” when useful to the answer. Lower-vote evidence is integrated without vote attribution; exact vote counts and rates stay out of answer prose. Votes do not count as additional reviewers or establish agreement with each assertion.
+
+Generation now aims for one coherent answer: lead with the response to the question, merge overlapping evidence, and connect benefits, limitations and disagreements naturally. The JSON `claims` array contains its sentences in reading order, with citations and quotes preserved. The prompts prohibit adding unsupported history, present popularity, recent improvements or new mod development merely to make the answer sound fluent.
+
+All stages share one UTC reference time, recorded as `context_as_of_utc` together with the formula and selected context. For reproducible inputs, pass `as_of="2026-11-06T12:00:00Z"` to `generate_summary` or `build_context`, or use the CLI option `--as-of`. The fixed `full_review` benchmark retains its original evidence payload and annotations. Current prompts use the synthesis instructions; archived generation results and their recorded prompt hashes remain available for reproduction.
+
+## Connect to the Group Retriever
+
+The group repository documents the handoff in [code/generation/README.md](https://github.com/GSrihariS/RAG_ASPA_Game_Retrieval/blob/main/code/generation/README.md). This module lives at `code/generation/rag_summary/`, alongside the separate aspect-based sentiment analysis module. The summarizer's callable is `generate_summary(query, hits)`; no `generation.answer` wrapper is required. Sentiment analysis can run separately on the same hits.
+
+Run the following integration examples from the group repository's **`code/` directory**. They use the existing retriever dependencies; the summarizer itself adds no Python packages.
+
+### Input and Output Contract
+
+Pass the original user question and the final ranked `hits` list from `app.py` directly to the summarizer. Use the same list displayed as the top review results.
+
+| Retriever field | Use in summarization |
+|---|---|
+| Original `query` | The question to answer; use this rather than the expanded retrieval query |
+| `hits[*].chunk_id` | Required; retained as the original citation ID |
+| `hits[*].text` | Required; the review evidence used to generate claims |
+| `hits[*].metadata.game_name` | Optional; identifies the game discussed by the passage |
+| `hits[*].metadata.source_url` | Optional; retained as the review link in the output citations |
+| Review identity, timestamps, and chunk offsets in `metadata` | Used to select the latest snapshot/update; available timestamps accompany model evidence |
+| `hits[*].metadata.helpful_votes` or `votes_up` | Recorded helpful vote count; used with publication age as an auxiliary weight in live generation |
+| List order | Preserved when building the context; duplicate passage IDs are removed |
+| Scores, ranks, `retrieved_by`, and other metadata | Not included in the model context |
+
+Review identity uses Steam chunk IDs, or `metadata.review_id` with `appid`/`game_name`, or `document_id`. Temporal selection reads `created_at_utc`/`updated_at_utc` (or `timestamp_created`/`timestamp_updated`), `chunk_index`, and `char_start` when available. `metadata.source` and `metadata.title` can remain in each hit. If a source URL is absent, citations still retain the original chunk ID.
+
+The return value includes:
+
+- `summary`: the answer with inline `[chunk_id]` citations.
+- `claims`: the retained claim text, supporting `chunk_ids`, and evidence quotes for B/C/D.
+- `citations`: unique cited `chunk_id` values and their available `source_url` values.
+- `status`: `ok`, `abstained`, or `no_evidence`.
+- `usage`, `latency_seconds`, `stage_calls`, and `claim_audit`: generation usage and verification records.
+- `context_policy` and, for live latest-update generation, `context_evidence`: the evidence policy and selected model input.
+- `context_as_of_utc` and `review_weight_formula`: the reference time and formula for live helpfulness weights.
+
+For live retrieval, omit `fact_candidates`. Original chunk IDs provide citations for any retrieved review. The fixed-benchmark runner supplies its own fact catalog when running the structured evaluation.
+
+### API Configuration
+
+Set these environment variables in the shell or hosting environment before starting the group app:
+
+| Variable | Value |
+|---|---|
+| `GENERATION_API_KEY` | Your generation provider's API key |
+| `GENERATION_BASE_URL` | For example, `https://api.deepseek.com` |
+| `GENERATION_MODEL` | For example, `deepseek-v4-pro` |
+
+Keep the key local. It is read from the environment and is not part of the retriever output or generated result files.
+
+### Add Summarization to the Streamlit App
+
+In `code/app.py`, replace the contents of the **"Sentiment analysis / generated answer"** placeholder with the following block. Keep the separate sentiment-analysis module's integration alongside it. The app already defines `query`, `hits`, `json`, and `st`.
+
+```python
+import os
+
+from paths import GENERATION_RESULTS_DIR
+from generation.rag_summary.rag_generator import (
+    GenerationError,
+    OpenAICompatibleClient,
+    generate_summary,
+    safe_error,
+)
+
+st.markdown("**Evidence-grounded review summary**")
+evidence_key = (query, tuple(
+    (h["chunk_id"], h["text"], json.dumps(h.get("metadata") or {}, sort_keys=True))
+    for h in hits
+))
+
+if st.button("Generate summary", key="rag_summary_generate"):
+    try:
+        with st.spinner("Generating an answer from the retrieved reviews..."):
+            result = generate_summary(
+                query,
+                hits,
+                approach="improved",
+                model=os.getenv("GENERATION_MODEL", "deepseek-v4-pro"),
+                client=OpenAICompatibleClient(
+                    base_url=os.getenv("GENERATION_BASE_URL", "https://api.deepseek.com")
+                ),
+                max_claims=4,
+            )
+        st.session_state["rag_summary_answer"] = (evidence_key, result)
+        output_dir = GENERATION_RESULTS_DIR / "rag_summary"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "latest_answer.json").write_text(
+            json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except GenerationError as error:
+        st.error(safe_error(error)["error_message"])
+
+saved = st.session_state.get("rag_summary_answer")
+if saved is not None and saved[0] == evidence_key:
+    result = saved[1]
+    st.markdown(result["summary"])
+    for citation in result["citations"]:
+        if citation["source_url"]:
+            st.link_button(citation["chunk_id"], citation["source_url"])
+    st.download_button(
+        "Download generated answer",
+        json.dumps(result, ensure_ascii=False, indent=2),
+        file_name="rag_summary.json",
+        mime="application/json",
+        key="rag_summary_download",
+    )
+```
+
+Start the existing group interface from `code/`:
+
+```bash
+streamlit run app.py
+```
+
+Search as usual, then click **Generate summary**. The button controls model calls; Streamlit reruns reuse the stored answer for the same question and evidence. Results are saved through `paths.py` to `data/generation_results/rag_summary/latest_answer.json`.
+
+### Use a Downloaded Retrieval Export
+
+The group interface's **Download results (JSON)** button produces a `search_results.json` object containing `query` and `results`. The generator accepts this export directly; `mode`, `filters`, `params`, `expansion`, and `timings_ms` require no conversion.
+
+Save the export as `data/retrieval_results/search_results.json`. After setting the environment variables above, run from `code/`:
+
+```bash
+python -c "from paths import GENERATION_RESULTS_DIR; (GENERATION_RESULTS_DIR / 'rag_summary').mkdir(parents=True, exist_ok=True)"
+python generation/rag_summary/rag_generator.py ../data/retrieval_results/search_results.json --approach improved --max-claims 4 --output ../data/generation_results/rag_summary/answer.json
+```
+
+For programmatic loading, use:
+
+```python
+from generation.rag_summary.rag_generator import load_retrieval
+from paths import RETRIEVAL_RESULTS_DIR
+
+query, hits = load_retrieval(RETRIEVAL_RESULTS_DIR / "search_results.json")
+```
+
+### Retrieve Without the UI
+
+Use the group's fusion and reranking methods to obtain the ranked list:
+
+```python
+from retrieval.hybrid_retriever import HybridRetriever
+from retrieval.query_expansion import expand_query
+from retrieval.reranker import Reranker
+
+query = "How is the soundtrack in Hollow Knight?"
+expansion = expand_query(query, mode="hierarchical")
+fused = HybridRetriever().retrieve_fused(
+    query,
+    top_k=30,
+    candidates=20,
+    filters={"game_name": ["Hollow Knight"]},
+    sparse_query=expansion.sparse,
+    dense_query=expansion.dense,
+)
+hits = Reranker().rerank(query, fused, top_k=5)
+# Pass query and hits to generate_summary as in the Streamlit example.
+```
+
+`HybridRetriever.retrieve()` returns separate sparse and dense lists. `retrieve_fused()` and `Reranker.rerank()` produce the ranked list consumed by the summarizer.
+
+### Live Answers and Benchmark Evaluation
+
+The integration above generates answers from the current retrieval results. The experiment web interface launched by `launch_web.py` runs the fixed 100-question benchmark with its saved evidence and reference sets. Its upload option accepts unchanged benchmark subsets. New questions or different retrieved passages require corresponding references before fact-selection metrics can be computed.
+
+The module's bundled benchmark data and final experiment results remain inside `rag_summary/` for reproduction. Live group-app outputs use the shared `GENERATION_RESULTS_DIR` path shown above.
+
 ## Command-line Experiments
 
 Set `GENERATION_API_KEY` in your own terminal, then run:
@@ -79,6 +273,7 @@ Each prediction line contains `id` and `selected_fact_ids`, with optional `appro
 
 ## Data and Scoring
 
+- `data/reference_summaries/reviewed/approved_references.jsonl`: 100 human-reviewed English summary references, including two translated Chinese edits. These answer-level references are ready for ROUGE evaluation and are separate from the fact-ID labels below.
 - `experiments/steam_generation_eval.jsonl`: 100 fixed questions, each with up to ten annotated review passages from saved `hybrid_rerank` rankings.
 - `data/generation_annotations/`: 1,000 annotated source passages, 2,898 review–aspect facts, and the final reference sets.
 - `data/generation_annotations/human_review.json`: 40 user-adjudicated decisions across 16 questions, comprising 22 core facts, seven optional background facts, and 11 excluded facts.
@@ -106,6 +301,7 @@ A/B each completed 100 tasks; C/D each completed 99. See the saved outputs and [
 
 ```text
 rag_generator.py            Generation, citation validation, self-checking, and revision
+review_context.py           Latest review updates and helpfulness/age signals
 prompts/                    A/B, fact-selection, verification, and revision prompts
 run_fact_experiments.py      Fixed-benchmark experiment runner
 experiment_web.py            Web backend, progress tracking, and ZIP export

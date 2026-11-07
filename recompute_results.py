@@ -49,6 +49,8 @@ def rescore(rows, references):
         if row['status']!='completed':
             raise ValueError('Expected final fact-selection experiment status')
         ref=targets[row['case_id']]
+        if row['result'].get('context_policy','full_review')!='full_review':
+            raise ValueError('Latest-update outputs require references for their filtered context, not the full-review benchmark')
         if row['result'].get('context_chunk_ids')!=ref['context_chunk_ids']:
             raise ValueError('Result context differs from the fixed benchmark')
         previous=row['metrics']
