@@ -10,7 +10,7 @@ import zipfile
 from evaluate_generation import (EVALUATION_METHOD, load_references, load_results,
                                  rescore, score_summary, strip_citations, tokenize)
 from run_generation_experiments import BENCHMARK, aggregate, benchmark, jsonl, paired_comparisons, run
-from generation_experiment_design import EXPERIMENT_PROTOCOL, select_cases
+from generation_experiment_design import EXAMPLES_PATH, EXPERIMENT_PROTOCOL, select_cases
 
 
 class SummaryModel:
@@ -86,8 +86,12 @@ class RougeExperimentTests(unittest.TestCase):
                 self.assertNotIn('reference',p)
                 self.assertNotIn('evidence verifier',messages[0]['content'])
                 if 'examples' in p:
-                    self.assertEqual(len(p['examples']),2)
-                    self.assertNotIn(self.case['id'],[e['case_id'] for e in p['examples']])
+                    self.assertEqual(list(p)[0],'examples')
+                    self.assertEqual(list(p['examples']),['case1','case2'])
+                    original=json.loads(EXAMPLES_PATH.read_text())
+                    self.assertEqual(p['examples'],{'case1':original[0],'case2':original[1]})
+                    self.assertNotIn(self.case['id'],[e['case_id'] for e in p['examples'].values()])
+                    self.assertIn('Read case1 and case2 separately',messages[0]['content'])
                 self.assertNotIn(reference,messages[1]['content'])
                 self.assertNotIn('STRUCTURED FACT SELECTION',messages[0]['content'])
                 self.assertIn('helpful_votes',p['evidence'][0])

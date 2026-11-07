@@ -31,6 +31,8 @@ All four methods share the baseline prompt, source-citation schema, model, metad
 
 The examples teach coherent synthesis, preserving qualifications and contrasting experiences. They use development questions q06 and q24 and their reviewed English answers. The current question's reference answer is never sent to generation. Example IDs cannot be scored in either split.
 
+The API input presents these as separate `examples.case1` and `examples.case2` objects, each containing its own question, evidence and response. The stored example contents are unchanged; the current question and evidence follow as top-level fields.
+
 Context compression fits TF-IDF locally to the current review sentences and ranks them against the question. A greedy relevance/redundancy criterion uses weight 0.8 for relevance and 0.2 for similarity to selected sentences. It first attempts to retain each sentence's immediate neighbors, then the complete sentence if the window exceeds the budget. Source order, IDs, metadata and exact text are retained. Separate extracts are joined with a visible gap marker. The default budget is 60% of original review-text characters; one indivisible sentence may exceed that budget and is flagged. A ratio of 1 retains the original context exactly. No reference text, aspect label or model is used for compression.
 
 Actual API input tokens include prompts, metadata and demonstrations. The text-retention ratio concerns review text only. Both are reported independently.

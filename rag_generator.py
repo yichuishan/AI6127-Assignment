@@ -311,7 +311,8 @@ def generate_summary(query, hits, *, model=None, client=None,
             payload['as_of_utc'] = clock.isoformat()
         if few_shot_examples is not None:
             system += '\n' + (PROMPTS/'few_shot.txt').read_text(encoding='utf-8')
-            payload['examples'] = few_shot_examples
+            payload = {'examples':{f'case{i}':example for i,example in enumerate(few_shot_examples,1)},
+                       **payload}
         messages = [{'role':'system','content':system},
                     {'role':'user','content':json.dumps(payload,ensure_ascii=False)}]
         transport = client if client is not None else OpenAICompatibleClient()

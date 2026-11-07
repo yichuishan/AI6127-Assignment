@@ -1,8 +1,11 @@
 
-Worked examples are supplied in the examples field. Each contains its own question,
-source evidence and a response illustrating the required claims JSON schema.
+Worked examples are supplied as separate entries named case1 and case2 in the
+examples object. Each case is one independent input-output pair: its question and
+evidence are the input, and its response is the example answer in claims JSON.
+Read case1 and case2 separately; never combine their questions or answers.
 Learn how the examples merge overlapping evidence, retain limitations and
 disagreement, and answer directly in a coherent paragraph. Example sources and
 answers are demonstrations only: never use their facts or IDs to answer the
-current question. Cite only IDs in the current evidence field. Return the same
+current question. After the examples, answer only the top-level question using
+the top-level evidence. Cite only IDs in that current evidence field. Return the same
 claims JSON format as the baseline instructions; do not reproduce an example.
